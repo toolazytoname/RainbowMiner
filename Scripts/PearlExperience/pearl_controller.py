@@ -3,7 +3,7 @@
 Stops and restores saved board power after user stop, time limit, sensor failure,
 thermal protection, miner exit, or normal Python exception. Driver clocks/fans stay automatic.
 """
-import argparse,ctypes,datetime,hashlib,json,math,os,pathlib,statistics,subprocess,sys,time,urllib.request
+import contextlib,argparse,ctypes,datetime,hashlib,json,math,os,pathlib,statistics,subprocess,sys,time,urllib.request
 from gpu_driver import Gpu
 from gpu_clients import gpu_processes,DESKTOP_PROCESSES
 SOURCE=pathlib.Path(__file__).parent;ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';EXE=ROOT/'1.5.12/krig-miner.exe'
@@ -21,6 +21,22 @@ def require(condition,message):
  if not condition:raise ValueError(message)
 
 def load(path):return json.loads(path.read_text(encoding='utf-8-sig'))
+@contextlib.contextmanager
+def mining_mutex(name='Global\\LazyPC-PearlMining'):
+ kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+ kernel.CreateMutexW.restype=ctypes.c_void_p;kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_wchar_p]
+ kernel.WaitForSingleObject.argtypes=[ctypes.c_void_p,ctypes.c_uint];kernel.CloseHandle.argtypes=[ctypes.c_void_p];kernel.ReleaseMutex.argtypes=[ctypes.c_void_p]
+ handle=kernel.CreateMutexW(None,False,name)
+ if not handle:raise ctypes.WinError(ctypes.get_last_error())
+ acquired=False
+ try:
+  acquired=kernel.WaitForSingleObject(handle,0) in [0,128]
+  if not acquired:raise RuntimeError('Another mining session is already running')
+  yield handle
+ finally:
+  if acquired:kernel.ReleaseMutex(handle)
+  kernel.CloseHandle(handle)
+
 class EndSession(Exception):pass
 class GuardStop(Exception):pass
 class Controller:
@@ -117,11 +133,8 @@ class Controller:
   result={'PowerLimitWatts':watts,'Seconds':round(time.monotonic()-start),'StopReason':reason,'Steady':self.steady(self.samples),'AverageHashrateTHs':rate,'AverageGpuWatts':power,'THsPerWatt':round(rate/power,5),'CoreAverage':mean('Temperature'),'CoreMaximum':max(r['Gpu']['Temperature'] for r in self.samples),'CoreSteadyMaximum':max(r['Gpu']['Temperature'] for r in tail),'HotspotAverage':mean('Hotspot'),'HotspotMaximum':max(r['Gpu']['Hotspot'] for r in self.samples),'MemoryJunctionAverage':mean('MemoryJunction'),'MemoryJunctionMaximum':max(r['Gpu']['MemoryJunction'] for r in self.samples),'FanPercentAverage':mean('FanPercent'),'AcceptedShares':self.samples[-1].get('AcceptedShares',0),'RejectedShares':self.samples[-1].get('RejectedShares',0),'Samples':len(self.samples),'StableWindowSeconds':180,'RunDirectory':str(sub)}
   write(sub/'result.json',result);return result
  def execute(self):
-  kernel=ctypes.WinDLL('kernel32',use_last_error=True);kernel.CreateMutexW.restype=ctypes.c_void_p;kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_wchar_p];kernel.WaitForSingleObject.argtypes=[ctypes.c_void_p,ctypes.c_uint];kernel.CloseHandle.argtypes=[ctypes.c_void_p];kernel.ReleaseMutex.argtypes=[ctypes.c_void_p]
-  self.mutex=kernel.CreateMutexW(None,False,'Global\\LazyPC-PearlMining')
-  if not self.mutex:raise ctypes.WinError(ctypes.get_last_error())
-  if kernel.WaitForSingleObject(self.mutex,0) not in [0,128]:
-   kernel.CloseHandle(self.mutex);self.mutex=None;raise RuntimeError('Another mining session is already running')
+  with mining_mutex():return self._execute_locked()
+ def _execute_locked(self):
   reason='completed'
   try:
    require(EXE.exists(),'Miner is missing; Windows protection is not bypassed')
@@ -163,7 +176,8 @@ class Controller:
    else:
     g=self.gpu.read()
     if g['Temperature']>55 or g['MemoryJunction']>70:self.cooldown('开始前冷却')
-   self.mine(int(self.cfg['power_watts']),int(self.cfg.get('default_minutes',480))*60,'selected-profile',extend=False)
+   result=self.mine(int(self.cfg['power_watts']),int(self.cfg.get('default_minutes',480))*60,'selected-profile',extend=False)
+   if result['StopReason']!='time_limit':raise EndSession(result['StopReason'])
   except (EndSession,GuardStop) as e:reason=str(e)
   except Exception as e:reason='error: '+str(e)
   finally:
@@ -172,7 +186,6 @@ class Controller:
    if self.s:
     self.s.update(Status='stopped',StopReason=reason,EndTime=now());self.save();write(self.run/'session-result.json',self.s)
    else:write(RT/'last-start-error.json',{'Time':now(),'Reason':reason})
-   kernel.ReleaseMutex(self.mutex);kernel.CloseHandle(self.mutex)
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('action',choices=['run','check']);p.add_argument('--mode',choices=['mine','calibrate'],default='mine');p.add_argument('--resume-calibration');a=p.parse_args()
  if a.action=='check':print(json.dumps({'Driver':Gpu().read(),'Config':{k:v for k,v in load(ROOT/'mining-config.json').items() if k not in ['wallet','exe_sha256']}}))

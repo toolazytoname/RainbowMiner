@@ -1,7 +1,7 @@
 # Copyright (c) 2026 toolazytoname. SPDX-License-Identifier: GPL-3.0-or-later
 """One-shot public-pool payout experience; no auto-restart, trading or wallet signing."""
 import datetime,decimal,html,json,os,pathlib,subprocess,sys,threading,time,urllib.request
-from pearl_controller import Controller,EndSession,ROOT,RT,load,write,now
+from pearl_controller import mining_mutex,Controller,EndSession,ROOT,RT,load,write,now
 from payout_limits import resume_deadline,seconds_left
 D=decimal.Decimal
 BASE='https://pool.kryptex.com'
@@ -85,22 +85,25 @@ class Experience(Controller):
             self.monitor_stop.set()
             if self.monitor:self.monitor.join(timeout=20)
     def execute(self):
+        with mining_mutex('Global\\LazyPC-PearlPayoutExperience'):return self._execute_experience_locked()
+    def _execute_experience_locked(self):
         try:
-            first=self.read_pool()
-            if first['GoalReached']:
-                self.state.update(MiningStopped=True,PowerRestored=True,Phase='payout_recorded' if first['PayoutRecorded'] else 'waiting_for_pool_payout');self.publish()
-            else:
-                if self.deadline<=time.monotonic():
-                    self.state.update(MiningStopped=True,PowerRestored=True,Phase='stopped_before_goal',SessionStopReason='original_mining_deadline_reached');self.publish();return
-                super().execute()
-                latest=load(RT/'session.json')
-                mine_result=None
-                result_file=self.run/'selected-profile'/'result.json' if self.run else None
-                if result_file and result_file.exists():mine_result=load(result_file)
-                self.state.update(MiningStopped=latest.get('Status')=='stopped',PowerRestored=latest.get('PowerRestored'),SessionStopReason=latest.get('StopReason'),ProfileStopReason=(mine_result or {}).get('StopReason'))
-                # A manual stop or thermal/resource guard ends the experience; never restart a miner.
-                self.state['Phase']='waiting_for_pool_payout' if self.state.get('GoalReached') else 'stopped_before_goal'
-                self.publish()
+            with mining_mutex():
+                first=self.read_pool()
+                if first['GoalReached']:
+                    self.state.update(MiningStopped=True,PowerRestored=True,Phase='payout_recorded' if first['PayoutRecorded'] else 'waiting_for_pool_payout');self.publish()
+                else:
+                    if self.deadline<=time.monotonic():
+                        self.state.update(MiningStopped=True,PowerRestored=True,Phase='stopped_before_goal',SessionStopReason='original_mining_deadline_reached');self.publish();return
+                    super()._execute_locked()
+                    latest=load(RT/'session.json')
+                    mine_result=None
+                    result_file=self.run/'selected-profile'/'result.json' if self.run else None
+                    if result_file and result_file.exists():mine_result=load(result_file)
+                    self.state.update(MiningStopped=latest.get('Status')=='stopped',PowerRestored=latest.get('PowerRestored'),SessionStopReason=latest.get('StopReason'),ProfileStopReason=(mine_result or {}).get('StopReason'))
+                    # A manual stop or thermal/resource guard ends the experience; never restart a miner.
+                    self.state['Phase']='waiting_for_pool_payout' if self.state.get('GoalReached') else 'stopped_before_goal'
+                    self.publish()
             if self.state['Phase']=='waiting_for_pool_payout':
                 end=time.monotonic()+MAX_WAIT_SECONDS
                 while time.monotonic()<end:

@@ -1,4 +1,5 @@
 """Fault-injection checks for payout bounds and hardware cleanup (no GPU)."""
+import contextlib
 import datetime as dt
 import json
 import pathlib
@@ -35,9 +36,24 @@ class BudgetTests(unittest.TestCase):
     def test_expired_experience_never_starts_gpu(self):
         e=object.__new__(pe.Experience);e.deadline=time.monotonic()-1;e.state={};e.monitor_stop=Mock();e.monitor=None;e.run=None
         e.read_pool=Mock(return_value={"GoalReached":False});e.publish=Mock()
-        with patch.object(pc.Controller,"execute") as start:
-            e.execute();start.assert_not_called()
+        with patch.object(pc.Controller,"_execute_locked") as start,patch.object(pe,"mining_mutex",return_value=contextlib.nullcontext()):
+            e._execute_experience_locked();start.assert_not_called()
         self.assertEqual(e.state["SessionStopReason"],"original_mining_deadline_reached")
+    def test_read_only_payout_wait_releases_gpu_mutex(self):
+        e=object.__new__(pe.Experience);e.state={};e.monitor_stop=Mock();e.monitor=None;e.run=None;e.publish=Mock()
+        held=[False];reads=[0]
+        @contextlib.contextmanager
+        def lock():
+            held[0]=True
+            try:yield
+            finally:held[0]=False
+        def pool():
+            reads[0]+=1
+            self.assertEqual(held[0],reads[0]==1)
+            return {"GoalReached":True,"PayoutRecorded":reads[0]>1}
+        e.read_pool=pool
+        with patch.object(pe,"mining_mutex",lock):e._execute_experience_locked()
+        self.assertEqual(e.state["Phase"],"payout_recorded")
     def test_mine_respects_shorter_manual_duration(self):
         e=object.__new__(pe.Experience);e.deadline=time.monotonic()+3600;e.state={};e.s={};e.run=None;e.publish=Mock();e.monitor_stop=Mock()
         with patch.object(pe.threading,"Thread") as thread,patch.object(pc.Controller,"mine",return_value={}) as mine:
