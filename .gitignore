@@ -35,3 +35,8 @@
 /Data/*-names.json
 /Data/donation*.json
 /Data/last*.json
+
+# Local Python environment and bytecode for the PRL supervisor
+.venv/
+__pycache__/
+*.pyc

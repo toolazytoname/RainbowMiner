@@ -20,6 +20,10 @@ Validation so far covers offline PowerShell logic and syntax (33 passing checks 
 
 ---
 
+## One-shot local supervisor
+
+The versioned Windows start/stop supervisor, deadline and payout guards, and hardware-free fault tests are in [Scripts/PearlExperience](Scripts/PearlExperience/README.md). The [Chinese local guide](Doc/PEARL-LOCAL-GUIDE.zh-CN.md) explains the two-repository boundary and everyday operation. This is separate from claims about the full upstream web UI.
+
 # RainbowMiner [![current release](https://img.shields.io/github/release/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/releases) [![current release date](https://img.shields.io/github/release-date/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/releases) [![open issues](https://img.shields.io/github/issues-raw/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/issues) [![downloads](https://img.shields.io/github/downloads/rainbowminer/RainbowMiner/total.svg)](https://github.com/RainbowMiner/RainbowMiner/releases)
 ###### **RELEASES: [https://github.com/RainbowMiner/RainbowMiner/releases](https://github.com/RainbowMiner/RainbowMiner/releases)**
 
