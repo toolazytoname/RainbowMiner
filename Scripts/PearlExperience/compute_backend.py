@@ -70,7 +70,12 @@ def read_source_stats(path):
         except ValueError:continue
         if not isinstance(row,dict) or 'rate' not in row:continue
         if row.get('algo')!='pearl-pow' or row.get('backend')!='CUDA' or row.get('unit')!='T MAC/s':raise BackendStatsError('Source backend must report CUDA T MAC/s; no unit conversion or CPU fallback')
-        if time.time()-modified>30:raise BackendStatsError('Source telemetry is stale')
+        # Only a real statistics record refreshes health. Pool warnings may
+        # keep the logfile mtime current while the last positive rate is old.
+        stamp=number(row.get('timestamp_unix_ms'),integral=True)
+        current=time.time()
+        if current-modified>30 or current-stamp/1000>30:raise BackendStatsError('Source telemetry is stale')
+        if stamp/1000-current>5:raise BackendStatsError('Source telemetry timestamp is in the future')
         rate=number(row['rate']);accepted=number(row.get('accepted'),integral=True);rejected=number(row.get('rejected'),integral=True);uptime=number(row.get('uptime_s'),integral=True)
-        return dict(ReportedRate=rate,ReportedRateUnit='T MAC/s',AcceptedShares=accepted,RejectedShares=rejected,StaleShares=0,BackendUptimeSeconds=uptime,DeviceBackend='CUDA')
+        return dict(ReportedRate=rate,ReportedRateUnit='T MAC/s',AcceptedShares=accepted,RejectedShares=rejected,StaleShares=0,BackendUptimeSeconds=uptime,BackendTimestampUnixMs=int(stamp),DeviceBackend='CUDA')
     return None

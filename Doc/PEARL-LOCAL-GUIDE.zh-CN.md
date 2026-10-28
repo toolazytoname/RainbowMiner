@@ -43,10 +43,21 @@ Source 的 `T MAC/s` 与 KRig 的 `TH/s` 保留各自原始口径，不做没有
 
 - 管理源码：`D:\Projects\toolazytoname\RainbowMiner`。
 - CUDA 计算源码：`D:\Projects\toolazytoname\soat-miner`。
-- 开源计算程序：该源码仓库 `build\prl3090-large\soat-miner.exe`。
+- 开源计算程序：该源码仓库 `build\prl3090-freshness\soat-miner.exe`。
 - 兼容原入口的配置与状态：`D:\Apps\KRig`。
 - 新的开源管理运行记录：`D:\AI\Playgrounds\RainbowMiner`。
 - 原 KRig 记录：`D:\AI\Playgrounds\KRig`。
 - 内核实验与 9.7% 对比证据：`D:\AI\Playgrounds\soat-miner\20261028-prl3090`。
 
 代码已按仓库分目录；输出与本机配置不随普通 Git 提交。独立内核测试、旧 KRig 测试和新管理流程分别保留证据。软件接管验收已经通过；真实的首次门槛停止与打款仍按本轮公开矿池状态继续观察。
+
+
+### 等待新任务时，为什么速度会变成 0？
+
+矿池有时会暂时没有可用的新任务。这时显卡空闲、功耗和温度下降是正常现象。
+新版在已经开始过计算后，会在等待期间继续报告 0 速度；新任务到来后恢复正常。
+界面不会继续把之前的速度当成当前速度。每条统计都有独立时间，单纯不断写告警
+不能让旧统计一直有效。启动时仍保留原有 90 秒首次有效统计保护。
+
+这次更新只改了主机端统计与显示校验，没有修改 CUDA 计算内核和证明算法。
+原来约 9.7% 的测试提升仍只指保存的内核方案相对原始源码基线，不代表兑币收益。

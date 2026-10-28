@@ -1,8 +1,8 @@
 [CmdletBinding()]
 param(
  [Parameter(Mandatory)][string]$EvidenceDirectory,
- [string]$ExpectedExecutable='D:\Projects\toolazytoname\soat-miner\build\prl3090-large\soat-miner.exe',
- [string]$ExpectedSha256='5157eeda4d5583c4453b30c39a00ca00cdb3d2b0038544bfd9232c7fde67b947',
+ [string]$ExpectedExecutable='D:\Projects\toolazytoname\soat-miner\build\prl3090-freshness\soat-miner.exe',
+ [string]$ExpectedSha256='820d7f63ca3d4806f8bb88ab514ed5a5078618c1a4cb0b459cc8c63f47f6f35b',
  [switch]$RequireAccepted
 )
 $ErrorActionPreference='Stop'
@@ -39,11 +39,14 @@ $log=Join-Path (Split-Path $receiptPath) 'miner.log'
 $rows=@(Get-Content -LiteralPath $log -Tail 200 -Encoding UTF8|ForEach-Object {try{$v=$_|ConvertFrom-Json;if($v.PSObject.Properties['rate']){$v}}catch{}})
 $sampleMatches=@($rows|Where-Object {$_.uptime_s -eq $s.BackendUptimeSeconds -and $_.backend -ceq 'CUDA' -and $_.unit -ceq 'T MAC/s' -and $_.algo -ceq 'pearl-pow' -and [double]$_.rate -eq [double]$s.ReportedRate -and $_.accepted -eq $s.AcceptedShares -and $_.rejected -eq $s.RejectedShares})
 Assert-True ($sampleMatches.Count -ge 1) 'Manager counters do not match an actual source JSON sample'
+$sample=$sampleMatches|Sort-Object timestamp_unix_ms -Descending|Select-Object -First 1
+$sampleAgeMs=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()-[long]$sample.timestamp_unix_ms
+Assert-True ($sample.timestamp_unix_ms -and $sampleAgeMs -ge -5000 -and $sampleAgeMs -le 30000) 'Matched source statistics are stale or missing their own timestamp'
 $headers=@(foreach($file in @($log,(Join-Path (Split-Path $log) 'miner-error.log'))){if(Test-Path -LiteralPath $file){Get-Content -LiteralPath $file -TotalCount 100 -Encoding UTF8}})
 $selected=$headers|Where-Object {$_ -match '\[pearl-pow\] 4096x65536 with ampere large s3 fold k64:'}
 Assert-True ($selected -and $s.ComputeBackend.Shape -ceq '4096x65536' -and $s.ComputeBackend.Tile -ceq '=ampere large s3 fold k64') 'Validated source configuration was not selected'
 if($RequireAccepted){Assert-True ([int]$s.AcceptedShares -gt 0 -and [int]$s.RejectedShares -eq 0) 'No accepted source proof or a rejection is present'}
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force|Out-Null
-$result=[ordered]@{Time=[datetime]::UtcNow.ToString('o');Passed=$true;PowerShell=$PSVersionTable.PSVersion.ToString();SessionId=$s.SessionId;MinerPid=$s.MinerPid;ControllerPid=$s.ControllerPid;Executable=$miner.ExecutablePath;ExecutableSha256=$ExpectedSha256;Rate=$s.ReportedRate;RateUnit=$s.ReportedRateUnit;Accepted=$s.AcceptedShares;Rejected=$s.RejectedShares;BackendUptimeSeconds=$s.BackendUptimeSeconds;CertificateAndHostnameVerified=$proof.Verified;TlsVersion=$proof.TlsVersion;Scope='Actual source process, creation identity, binary/source hashes, CUDA JSON sample and owned authenticated TLS socket. No separate HTTP API or full upstream web UI claim.';GPUWorkStarted=$false;MinerStarted=$false}
+$result=[ordered]@{Time=[datetime]::UtcNow.ToString('o');Passed=$true;PowerShell=$PSVersionTable.PSVersion.ToString();SessionId=$s.SessionId;MinerPid=$s.MinerPid;ControllerPid=$s.ControllerPid;Executable=$miner.ExecutablePath;ExecutableSha256=$ExpectedSha256;Rate=$s.ReportedRate;RateUnit=$s.ReportedRateUnit;Accepted=$s.AcceptedShares;Rejected=$s.RejectedShares;BackendUptimeSeconds=$s.BackendUptimeSeconds;SourceTimestampUnixMs=$sample.timestamp_unix_ms;SourceSampleAgeMs=$sampleAgeMs;CertificateAndHostnameVerified=$proof.Verified;TlsVersion=$proof.TlsVersion;Scope='Actual source process, creation identity, binary/source hashes, CUDA JSON sample and owned authenticated TLS socket. No separate HTTP API or full upstream web UI claim.';GPUWorkStarted=$false;MinerStarted=$false}
 $result|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'source-live-result.json') -Encoding UTF8
 $result|ConvertTo-Json -Depth 5

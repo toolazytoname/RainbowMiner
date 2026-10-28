@@ -11,7 +11,7 @@ class BackendTests(unittest.TestCase):
         self.log=self.root/'miner.log'
     def tearDown(self):self.tmp.cleanup()
     def row(self,**changes):
-        data={'algo':'pearl-pow','backend':'CUDA','unit':'T MAC/s','rate':51.23,'accepted':3,'rejected':0,'uptime_s':60};data.update(changes);return data
+        data={'algo':'pearl-pow','backend':'CUDA','unit':'T MAC/s','rate':51.23,'accepted':3,'rejected':0,'uptime_s':60,'timestamp_unix_ms':int(time.time()*1000)};data.update(changes);return data
     def write(self,row):self.log.write_text(json.dumps(row)+'\n',encoding='utf-8')
     def test_source_binary_identity_is_checked(self):
         b=select_compute_backend(self.cfg,self.root);b.verify_binary();self.exe.write_bytes(b'changed')
@@ -49,5 +49,31 @@ class BackendTests(unittest.TestCase):
         with self.assertRaisesRegex(BackendStatsError,'stale'):read_source_stats(self.log)
     def test_missing_startup_stats_are_not_fabricated(self):
         self.assertIsNone(read_source_stats(self.log));self.log.write_text('starting\n');self.assertIsNone(read_source_stats(self.log))
+
+    def test_warnings_cannot_refresh_expired_statistics(self):
+        self.write(self.row(timestamp_unix_ms=int((time.time()-45)*1000)))
+        with self.log.open('a') as stream:
+            stream.write('{"event":"warn","msg":"waiting for a job"}\n')
+        # The file is fresh; the only statistics record is not.
+        self.assertLess(time.time()-self.log.stat().st_mtime,5)
+        with self.assertRaisesRegex(BackendStatsError,'stale'):read_source_stats(self.log)
+    def test_statistics_require_their_own_timestamp(self):
+        row=self.row();row.pop('timestamp_unix_ms');self.write(row)
+        with self.assertRaises(BackendStatsError):read_source_stats(self.log)
+    def test_future_statistics_timestamp_is_rejected(self):
+        self.write(self.row(timestamp_unix_ms=int((time.time()+60)*1000)))
+        with self.assertRaisesRegex(BackendStatsError,'future'):read_source_stats(self.log)
+    def test_zero_waiting_heartbeat_is_fresh_without_inventing_shares(self):
+        self.write(self.row(rate=0,uptime_s=75));row=read_source_stats(self.log)
+        self.assertEqual(row['ReportedRate'],0);self.assertEqual(row['AcceptedShares'],3)
+        self.assertEqual(row['DeviceBackend'],'CUDA');self.assertGreater(row['BackendTimestampUnixMs'],0)
+    def test_disappeared_records_do_not_reuse_the_previous_positive_rate(self):
+        from types import SimpleNamespace
+        from pearl_controller import Controller,GuardStop
+        controller=Controller.__new__(Controller)
+        controller.backend=SimpleNamespace(kind='soat');controller.backend_log=self.log
+        controller.last_api={'ReportedRate':51.23}
+        self.log.write_text('warning only\n')
+        with self.assertRaisesRegex(GuardStop,'disappeared'):controller.api()
 
 if __name__=='__main__':unittest.main(verbosity=2)

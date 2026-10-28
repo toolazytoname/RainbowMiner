@@ -39,7 +39,7 @@ Windows Python 3.12.15 uses this repository's `.venv`; runtime code uses the sta
 .\.venv\Scripts\python.exe Scripts\PearlExperience\test_recovery.py
 ```
 
-The 49 CPU-side checks also pass with `-O`: local TLS servers and bounded owned CPU children are used, with no GPU workload. The native KRig adapter's separate 19 offline cases pass in both PS7 and PS5.1.
+The 54 CPU-side checks also pass with `-O`: local TLS servers and bounded owned CPU children are used, with no GPU workload. The native KRig adapter's separate 19 offline cases pass in both PS7 and PS5.1.
 
 `Install-Tasks.ps1` is an explicit deployment, not a mining start. It requires stopped tasks, runs the checks, backs up all five task XML definitions and old launchers, and installs versioned mining/experience/calibration, exact-identity recovery, and the unit-aware panel. None has a boot/login trigger. Existing local config and the previous payout deadline are deliberately required; installation does not create a new unlimited budget.
 
@@ -48,3 +48,20 @@ The live source checker is `Tests/Test-PearlSourceLive.ps1 -EvidenceDirectory <W
 ## Storage
 
 Config and shared runtime state stay in `D:\Apps\KRig` for existing entry compatibility. New source-managed sessions are under `D:\AI\Playgrounds\RainbowMiner`; prior KRig runs remain under `D:\AI\Playgrounds\KRig`. Source-kernel experiments remain under `D:\AI\Playgrounds\soat-miner`. Code stays one repository per `D:\Projects\<owner>\<repo>`. Config, logs, wallet keys and binaries are not committed.
+
+
+### Fresh statistics during a pool-side wait
+
+The selected source binary emits `timestamp_unix_ms` on every rate record.
+After the first prepared job, failed/retired job fetches emit fresh zero-rate
+heartbeats instead of leaving the previous positive rate on screen. Initial
+startup still waits for real work under the existing 90-second statistics guard.
+The reader checks the record timestamp (30 seconds maximum age, at most 5 seconds
+in the future), not just log modification time. Repeated warnings cannot refresh
+an old record; disappearing statistics cannot reuse a cached positive rate.
+
+The bounded source test `tools/test_waiting_telemetry.py` exercises actual CUDA
+work, 50 seconds with a retired mock job, and resumed work. It runs only against
+a loopback fixture, uses the source guard, and never proves pool earnings. Real
+pool acceptance and TLS validation are recorded separately. The CUDA kernels and
+proof encoding are unchanged by this host-side statistics correction.

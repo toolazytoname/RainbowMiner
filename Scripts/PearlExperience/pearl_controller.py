@@ -55,6 +55,7 @@ class Controller:
    try:
     value=read_source_stats(self.backend_log)
     if value:self.last_api=value
+    elif self.last_api:raise BackendStatsError('Source telemetry disappeared after startup')
     return self.last_api
    except BackendStatsError as exc:raise GuardStop(str(exc))
   try:
