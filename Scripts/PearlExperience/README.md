@@ -65,3 +65,7 @@ work, 50 seconds with a retired mock job, and resumed work. It runs only against
 a loopback fixture, uses the source guard, and never proves pool earnings. Real
 pool acceptance and TLS validation are recorded separately. The CUDA kernels and
 proof encoding are unchanged by this host-side statistics correction.
+
+## One-case backend comparison
+
+The experimental run_backend_comparison_case.py entry selects SOAT or KRig in memory for one bounded 1..15 minute case under the existing payout, original deadline, TLS, ownership, temperature and coexistence guards. It never writes the production mining configuration. KRig on the authenticated localhost relay requires --accept-krig-relay-fee-percent 3; the source route rejects that fee option. Use a new absolute --receipt path and an operator-started elevated interactive task. There is no retry or scheduled boot trigger. The default desktop Start entry continues to use the production configuration.
