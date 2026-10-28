@@ -11,7 +11,7 @@ This directory is the versioned management entry for an existing, authorized Win
 - Stop and restore the starting board power cap. Preserve an external cap change. An owned child that cannot stop keeps its reduced cap and process reference.
 - Stop when confirmed plus pending pool balance reaches the first payout threshold, or the pool records a payout. Pending maturity does not require further mining.
 - Preserve the original mining deadline from `Runtime/payout-experience.json` across every restart. The per-run minutes limit can be shorter. No implicit extension, currency trading, wallet signing or automatic restart.
-- The public pool API is checked before mining and watched while running. Thirty minutes of continuous pool API failure ends mining. After reaching the threshold, read-only payout watching lasts at most 12 hours.
+- The public pool API is checked before mining and watched while running. Thirty minutes of continuous pool API failure ends mining. After reaching the threshold, read-only payout watching lasts at most 12 hours. Manual Stop cancels this watcher as well: idle gaps check the stop request every second; each of the two public API requests has an 8-second network timeout. Cancelling queries never changes the pool balance or starts the GPU.
 
 These files are a local supervisor in this fork, not a claim that the full upstream RainbowMiner web UI has been validated. The native KRig adapter is documented separately in `Doc/KRIG-INTEGRATION.md`.
 

@@ -34,9 +34,9 @@ def fetch(wallet):
     return interpret(*values)
 
 def render(state):
-    phase={'preflight':'准备中','mining':'累计到门槛后自动停止','calibrating':'功率标定中，仍受原截止时间和首次门槛约束','waiting_for_pool_payout':'挖矿已结束，等待矿池确认和打款','payout_recorded':'矿池已记录打款，体验结束','stopped_before_goal':'已停止，不自动重启','waiting_timeout':'挖矿已结束，打款尚待确认','error':'已停止，检查记录'}.get(state.get('Phase'),state.get('Phase',''))
+    phase={'preflight':'准备中','mining':'累计到门槛后自动停止','calibrating':'功率标定中，仍受原截止时间和首次门槛约束','waiting_for_pool_payout':'挖矿已结束，等待矿池确认和打款','payout_recorded':'矿池已记录打款，体验结束','stopped_before_goal':'已停止，不自动重启','waiting_timeout':'挖矿已结束，打款尚待确认','payout_wait_cancelled':'挖矿已结束，已按要求停止查询打款','error':'已停止，检查记录'}.get(state.get('Phase'),state.get('Phase',''))
     esc=lambda value:html.escape(str(value))
-    cells=''.join(f'<tr><th>{label}</th><td>{esc(state.get(key,"—"))}</td></tr>' for key,label in [('Time','更新时间'),('TotalPrl','池内累计 PRL'),('ConfirmedPrl','已确认 PRL'),('UnconfirmedPrl','待确认 PRL'),('ThresholdPrl','打款门槛 PRL'),('RemainingPrl','距离门槛 PRL'),('PayoutCount','矿池打款记录数'),('MiningStopped','挖矿是否停止'),('PowerRestored','原功率限制已恢复'),('MiningDeadline','挖矿最长截止时间'),('SessionStopReason','停止原因'),('Error','最近错误')])
+    cells=''.join(f'<tr><th>{label}</th><td>{esc(state.get(key,"—"))}</td></tr>' for key,label in [('Time','更新时间'),('TotalPrl','池内累计 PRL'),('ConfirmedPrl','已确认 PRL'),('UnconfirmedPrl','待确认 PRL'),('ThresholdPrl','打款门槛 PRL'),('RemainingPrl','距离门槛 PRL'),('PayoutCount','矿池打款记录数'),('MiningStopped','挖矿是否停止'),('PowerRestored','原功率限制已恢复'),('MiningDeadline','挖矿最长截止时间'),('SessionStopReason','停止原因'),('PayoutWaitStopReason','停止查询原因'),('Error','最近错误')])
     url=BASE+'/prl/miner/stats/'+state['Wallet']
     page=f'<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="60"><title>Pearl 一次体验</title><style>body{{font:17px/1.7 system-ui,sans-serif;max-width:860px;margin:45px auto;padding:0 24px;background:#f6f7f9;color:#20252d}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{text-align:left;padding:10px 15px;border-bottom:1px solid #e5e7eb}}th{{width:44%;font-weight:500}}a{{color:#2759c7}}</style><h1>Pearl 一次体验</h1><p>{esc(phase)}</p><p>池内累计（已确认＋待确认）达到打款门槛，或矿池出现打款记录，即停止显卡挖矿并恢复本轮开始前的功率限制。待确认收益继续由矿池处理，无需继续挖矿。</p><table>{cells}</table><p>温度保护、手动停止和 GPU 任务让路继续有效；停止后不会自动重启。最长挖矿 36 小时；矿池接口连续 30 分钟不可用则停止。</p><p><a href="{esc(url)}">打开自己的矿池页面</a>。打款记录不等于人民币提现；本轮直接收取 PRL，不做兑换。</p><p>只查询公开地址；程序不会读取助记词、私钥或钱包密码。</p></html>'
     REPORT.write_text(page,encoding='utf-8')
@@ -106,22 +106,36 @@ class Experience(Controller):
                     # A manual stop or thermal/resource guard ends the experience; never restart a miner.
                     self.state['Phase']='waiting_for_pool_payout' if self.state.get('GoalReached') else 'stopped_before_goal'
                     self.publish()
-            if self.state['Phase']=='waiting_for_pool_payout':
-                end=time.monotonic()+MAX_WAIT_SECONDS
-                while time.monotonic()<end:
-                    try:
-                        snapshot=self.read_pool()
-                        if snapshot['PayoutRecorded']:
-                            self.state['Phase']='payout_recorded';self.publish();return
-                    except Exception as exc:self.state['Error']=str(exc);self.publish()
-                    time.sleep(300)
-                self.state['Phase']='waiting_timeout';self.publish()
+            if self.state['Phase']=='waiting_for_pool_payout':self.wait_for_pool_payout()
         except Exception as exc:
             self.state.update(Phase='error',Error=str(exc));self.publish();raise
         finally:
             self.monitor_stop.set()
             if self.monitor:self.monitor.join(timeout=20)
             if self.run:write(self.run/'experience-result.json',self.state)
+
+
+    def payout_wait_cancelled(self):
+        # Only manual stop applies here: the GPU is already stopped, and the
+        # original mining deadline / threshold reason must not cancel settlement.
+        try:Controller.check_stop(self)
+        except EndSession as exc:
+            self.state.update(Phase='payout_wait_cancelled',PayoutWaitStopReason=str(exc));self.publish();return True
+        return False
+    def wait_for_pool_payout(self):
+        end=time.monotonic()+MAX_WAIT_SECONDS
+        while time.monotonic()<end:
+            if self.payout_wait_cancelled():return
+            try:
+                snapshot=self.read_pool()
+                if snapshot['PayoutRecorded']:
+                    self.state['Phase']='payout_recorded';self.publish();return
+            except Exception as exc:self.state['Error']=str(exc);self.publish()
+            next_poll=min(end,time.monotonic()+300)
+            while time.monotonic()<next_poll:
+                if self.payout_wait_cancelled():return
+                time.sleep(min(1,max(0,next_poll-time.monotonic())))
+        self.state['Phase']='waiting_timeout';self.publish()
 
 def self_test():
     def b(total,confirmed='0',pending=None,threshold='1'):

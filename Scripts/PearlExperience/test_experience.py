@@ -52,7 +52,7 @@ class BudgetTests(unittest.TestCase):
             self.assertEqual(held[0],reads[0]==1)
             return {"GoalReached":True,"PayoutRecorded":reads[0]>1}
         e.read_pool=pool
-        with patch.object(pe,"mining_mutex",lock):e._execute_experience_locked()
+        with patch.object(pe,"mining_mutex",lock),patch.object(pc.Controller,"check_stop"):e._execute_experience_locked()
         self.assertEqual(e.state["Phase"],"payout_recorded")
     def test_mine_respects_shorter_manual_duration(self):
         e=object.__new__(pe.Experience);e.mode='mine';e.monitor=None;e.deadline=time.monotonic()+3600;e.state={};e.s={};e.run=None;e.publish=Mock();e.monitor_stop=Mock()
@@ -75,6 +75,44 @@ class BudgetTests(unittest.TestCase):
         self.assertTrue(pe.interpret({"total":"0","confirmed":"0","unconfirmed":"0","threshold":"1"},{"count":1,"results":[]})["PayoutRecorded"])
         for total,pending,count in [("NaN","0",0),("1","0",0),("0","0",True)]:
             with self.assertRaises(ValueError):pe.interpret({"total":total,"confirmed":"0","unconfirmed":pending,"threshold":"1"},{"count":count,"results":[]})
+
+
+class PayoutWaitTests(unittest.TestCase):
+    def experience(self):
+        e=object.__new__(pe.Experience)
+        e.state={"Phase":"waiting_for_pool_payout","MiningStopped":True,"PowerRestored":True}
+        e.end_reason="payout_threshold_accumulated";e.publish=Mock();e.read_pool=Mock()
+        return e
+    def test_manual_stop_before_poll_keeps_gpu_stopped(self):
+        e=self.experience()
+        with patch.object(pc.Controller,"check_stop",side_effect=pc.EndSession("user_stop")):
+            e.wait_for_pool_payout()
+        e.read_pool.assert_not_called()
+        self.assertEqual(e.state["Phase"],"payout_wait_cancelled")
+        self.assertEqual(e.state["PayoutWaitStopReason"],"user_stop")
+        self.assertTrue(e.state["MiningStopped"] and e.state["PowerRestored"])
+    def test_threshold_reason_does_not_cancel_read_only_settlement(self):
+        e=self.experience();e.read_pool.return_value={"PayoutRecorded":True}
+        with patch.object(pc.Controller,"check_stop") as manual_stop,patch.object(pe.Experience,"check_stop",side_effect=AssertionError("Mining checks cannot run after GPU release")):
+            e.wait_for_pool_payout()
+        manual_stop.assert_called_once_with(e)
+        self.assertEqual(e.state["Phase"],"payout_recorded")
+    def test_stop_interrupts_poll_gap_without_waiting_five_minutes(self):
+        e=self.experience();e.read_pool.return_value={"PayoutRecorded":False}
+        with patch.object(pc.Controller,"check_stop",side_effect=[None,pc.EndSession("user_stop")]),patch.object(pe.time,"sleep") as sleep:
+            e.wait_for_pool_payout()
+        sleep.assert_not_called();self.assertEqual(e.read_pool.call_count,1)
+        self.assertEqual(e.state["Phase"],"payout_wait_cancelled")
+    def test_api_error_can_still_be_cancelled(self):
+        e=self.experience();e.read_pool.side_effect=TimeoutError("public API timeout")
+        with patch.object(pc.Controller,"check_stop",side_effect=[None,pc.EndSession("user_stop")]),patch.object(pe.time,"sleep") as sleep:
+            e.wait_for_pool_payout()
+        sleep.assert_not_called();self.assertEqual(e.state["Error"],"public API timeout")
+        self.assertEqual(e.state["Phase"],"payout_wait_cancelled")
+    def test_read_only_wait_remains_bounded(self):
+        e=self.experience()
+        with patch.object(pe,"MAX_WAIT_SECONDS",0):e.wait_for_pool_payout()
+        e.read_pool.assert_not_called();self.assertEqual(e.state["Phase"],"waiting_timeout")
 
 class CleanupTests(unittest.TestCase):
     def controller(self,power=220):
