@@ -1,3 +1,20 @@
+# 小兔头 · RainbowMiner PRL 实验分支
+
+这是 [RainbowMiner/RainbowMiner](https://github.com/RainbowMiner/RainbowMiner) 的独立维护 fork，基于 `a7d68dbe04b45d6b602575e990ef07c69f772bed`。保留上游署名、历史和 GPLv3 许可证。
+
+- [中文上手与收费说明](Doc/FORK-QUICKSTART.zh-CN.md)
+- [本次代码审查、修复与后续优化](Doc/FORK-REVIEW.zh-CN.md)
+- [公开、可检查的 PRL 捐赠配置](Data/ForkDonation.json)
+- [离线回归测试](Tests/Test-Fork.ps1)
+
+**本分支默认每天 24 分钟（约 1.67% 的时间）用于支持维护者“小兔头”。`Donate=0` 可关闭。仅支持 PRL；矿工与矿池可能另外收费。普通用户的挖矿收款地址不属于捐赠地址，仍由用户自行配置。**
+
+首次启动默认暂停；默认关闭上游自动更新和外部矿机监控。自动安装/启动流程不会添加 Defender 排除项。旧的 ZIP 更新器被阻止覆盖本分支，请通过 Git 审查和更新。
+
+当前验证范围：PowerShell 离线逻辑和语法测试。未启动新的矿工，未测试 GUI 完整流程或宣称提高 GPU 算力。下面保留上游 README；与本分支不同的行为以以上中文说明为准。
+
+---
+
 # RainbowMiner [![current release](https://img.shields.io/github/release/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/releases) [![current release date](https://img.shields.io/github/release-date/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/releases) [![open issues](https://img.shields.io/github/issues-raw/RainbowMiner/RainbowMiner.svg)](https://github.com/RainbowMiner/RainbowMiner/issues) [![downloads](https://img.shields.io/github/downloads/rainbowminer/RainbowMiner/total.svg)](https://github.com/RainbowMiner/RainbowMiner/releases)
 ###### **RELEASES: [https://github.com/RainbowMiner/RainbowMiner/releases](https://github.com/RainbowMiner/RainbowMiner/releases)**
 

@@ -330,7 +330,7 @@ param(
     [Parameter(Mandatory = $false)]
     [int]$MaxCachefileDays = 14, # maximum days for the cachefiles to keep
     [Parameter(Mandatory = $false)]
-    [Switch]$StartPaused = $false,
+    [Switch]$StartPaused = $true,
     [Parameter(Mandatory = $false)]
     [Switch]$EnablePauseOnActivity = $false,
     [Parameter(Mandatory = $false)]
@@ -430,7 +430,7 @@ param(
 )
 
 $ForceFullCollection = $true
-$EnableMinerStatus = $true
+# Respect the EnableMinerStatus parameter; do not force external monitoring on.
 
 if ($MyInvocation.MyCommand.Path) {Set-Location (Split-Path $MyInvocation.MyCommand.Path)}
 
@@ -555,19 +555,7 @@ $MyCommandParameters | Foreach-Object {
     }
 }
 
-if ($IsWindows -and $Session.IsAdmin) {
-    if (Test-Path "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1") {
-        try {
-            # read the exclusion list via CIM: Get-MpPreference would load the Defender module in-process (and spawn a persistent WinPS compat process under pwsh)
-            $MpPreference = Get-CimInstance -Namespace "root\Microsoft\Windows\Defender" -ClassName "MSFT_MpPreference" -ErrorAction Stop
-            if ($MpPreference -and $MpPreference.ExclusionPath -notcontains (Convert-Path .)) {
-                Start-Process (@{desktop = "powershell"; core = "pwsh"}.$PSEdition) "-Command Import-Module '$env:Windir\System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1'$(if ($Session.IsCore) {" -SkipEditionCheck"}); Add-MpPreference -ExclusionPath '$(Convert-Path .)'" -Verb runAs -WindowStyle Hidden
-            }
-        } catch {
-            Write-Log -Level Warn "WARNING: The RainbowMiner path ($(Convert-Path .)) could not be added to MS Defender's exclusion list. Please do this by hand!"
-        }
-    }
-}
+# This fork never creates Defender exclusions during startup.
 
 #Begin capture of the current console output
 if (-not $SetupOnly) {

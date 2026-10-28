@@ -41,25 +41,15 @@ if ($IsLinux) {
 if ($IsWindows) {
     if ($Session.IsCore) {
         Import-Module NetSecurity -ErrorAction Ignore -SkipEditionCheck
-        Import-Module Defender -ErrorAction Ignore -SkipEditionCheck
         Import-Module NetTCPIP -ErrorAction Ignore -SkipEditionCheck
         Import-Module "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\NetSecurity\NetSecurity.psd1" -ErrorAction Ignore -SkipEditionCheck
-        Import-Module "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1" -ErrorAction Ignore -SkipEditionCheck
         Import-Module "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\NetTCPIP\NetTCPIP.psd1" -ErrorAction Ignore -SkipEditionCheck
     } else {
         Import-Module NetSecurity -ErrorAction Ignore
-        Import-Module Defender -ErrorAction Ignore
         Import-Module "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\NetSecurity\NetSecurity.psd1" -ErrorAction Ignore
-        Import-Module "$env:Windir\System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1" -ErrorAction Ignore
     }
 
-    if ((Get-Command "Get-MpPreference" -ErrorAction Ignore) -and (Get-MpPreference).ExclusionPath -notcontains (Convert-Path .)) {
-        try {
-            Start-Process (@{desktop = "powershell"; core = "pwsh"}.$PSEdition) "-Command Import-Module '$env:Windir\System32\WindowsPowerShell\v1.0\Modules\Defender\Defender.psd1'$(if ($Session.IsCore) {" -SkipEditionCheck"}); Add-MpPreference -ExclusionPath '$(Convert-Path .)'" -Verb runAs -WindowStyle Hidden
-        } catch {
-            Write-Host "WARNING: The RainbowMiner path ($(Convert-Path .)) could not be added to MS Defender's exclusion list. Please do this by hand!" -ForegroundColor Yellow
-        }
-    }
+    # This fork leaves Defender protection and its exclusion list unchanged.
 
     @(try {
         Get-CimInstance CIM_VideoController | Where-Object {

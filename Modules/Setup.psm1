@@ -1984,7 +1984,7 @@ function Start-Setup {
                             $Config.UserAgent = Read-HostString -Prompt "Enter a custom user agent for all web requests, if your provider or Cloudflare blocks the default ($(if ($Config.UserAgent) {"enter 'clear'"} else {"leave empty"}) to use the built-in one)" -Default $Config.UserAgent -Characters "" | Foreach-Object {if ($Controls -icontains $_) {throw $_};$_}
                         }
                         "donate" {
-                            $Config.Donate = [int]($(Read-HostDouble -Prompt "Enter the developer donation fee in %" -Default ([Math]::Round($Config.Donate/0.1440)/100) -Mandatory -Min 0.69 -Max 100)*14.40) | Foreach-Object {if ($Controls -icontains $_) {throw $_};$_}
+                            $Config.Donate = [int]($(Read-HostDouble -Prompt "PRL fork support time in % (0 disables; recipient: Xiaotutou)" -Default ([Math]::Round($Config.Donate/0.1440)/100) -Mandatory -Min 0 -Max 100)*14.40) | Foreach-Object {if ($Controls -icontains $_) {throw $_};$_}
                         }
                         "ssl" {
                             $Config.SSL = Read-HostInt -Prompt "Configure SSL usage: 0=prefer non-SSL over SSL, 1=prefel SSL over non-SSL, 2=use SSL pools only" -Default $Config.SSL -Min 0 -Max 2 | Foreach-Object {if ($Controls -icontains $_) {throw $_};$_}

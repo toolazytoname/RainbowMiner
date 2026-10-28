@@ -1,7 +1,18 @@
-﻿<!--#include file="/parts/head.html" -->
+<!--#include file="/parts/head.html" -->
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 id="title" data-navbaractive="navdonate" class="h2">Thank you for using RainbowMiner!</h1>
+    <h1 id="title" data-navbaractive="navdonate" class="h2">小兔头 · RainbowMiner 维护分支</h1>
 </div>
+
+<section class="alert alert-info mt-3" aria-label="本分支捐赠说明">
+    <h5>本分支维护者：小兔头 · 仅收 PRL</h5>
+    <p>默认每天 <strong>24 分钟（约 1.67% 的时间）</strong>为维护者挖矿。实际时间以 <code>Donate</code> 配置为准；设为 <code>0</code> 可关闭。矿工开发者费、矿池费另外计算。</p>
+    <label for="copy-prl-fork-input">维护者 PRL 主网公开收款地址</label>
+    <div class="input-group mb-2">
+        <input type="text" class="form-control" value="prl1pnuee3duuwy0jduln4snrfjal38kwrhp3v92lt8yua4d3pcn39rsqsutgft" id="copy-prl-fork-input" readonly>
+        <span class="input-group-btn"><button class="btn btn-default btn-clipboard" type="button" data-clipboard-action="copy" data-clipboard-target="#copy-prl-fork-input">复制 PRL 地址</button></span>
+    </div>
+    <p class="mb-0">此地址只用于维护者捐赠轮次；你的普通挖矿收款地址由你自己配置。地址校验失败或 Kryptex 不可用时跳过捐赠，不从远端下载替代地址。下方保留上游作者的自愿打赏和推荐链接，它们与本分支捐赠轮次分开。</p>
+</section>
 
 <h5 class="mt-4 h-selector" id="h-referalboxes">If you plan to sign up for any of the following services, you can support my work by using my referal links plus get some benefit yourself</h5>
 <div id="referals" class="card-deck">

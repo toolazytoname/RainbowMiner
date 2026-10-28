@@ -1,0 +1,27 @@
+{
+  "Enabled": true,
+  "Recipient": "小兔头",
+  "Network": "PRL",
+  "Notice": "默认每天24分钟（约1.67%）用于本分支维护者；Donate=0可关闭。仅PRL，不修改普通用户收款地址。矿工及矿池可能另收费用。",
+  "Probability": 100,
+  "Wallets": {
+    "Kryptex": {
+      "PRL": "prl1pnuee3duuwy0jduln4snrfjal38kwrhp3v92lt8yua4d3pcn39rsqsutgft",
+      "Worker": "xiaotutou-support",
+      "CoinSymbol": "PRL",
+      "DataWindow": "estimate_current",
+      "Penalty": 0,
+      "SSL": 2
+    },
+    "Default": {
+      "Worker": "xiaotutou-support"
+    }
+  },
+  "Pools": [
+    "Kryptex"
+  ],
+  "Algorithm": [
+    "PearlHash"
+  ],
+  "ExcludeMinerName": []
+}

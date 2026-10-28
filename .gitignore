@@ -1,0 +1,37 @@
+# Local configuration may contain pool/API credentials.
+/Config/
+/Logs/
+/Stats/
+/Cache/
+/Downloads/
+/Bin/
+/Backup/
+/Backups/
+/Report/
+/Reports/
+/Run/
+/Runtime/
+/Pools/Userpools/
+/Miners/Userdefined/
+*.log
+*.tmp
+*.saved
+*.pid
+*.lock
+*.local.json
+.env
+.env.*
+.vscode/
+.idea/
+# Files materialized by helper extractors and local hardware detection.
+/7z.exe
+/7z.dll
+/7za.exe
+/7za.dll
+/curl.exe
+/msvcr*.dll
+/Data/version.json
+/Data/gpu-count.txt
+/Data/*-names.json
+/Data/donation*.json
+/Data/last*.json

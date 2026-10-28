@@ -1,4 +1,5 @@
 ﻿[PSCustomObject]@{
+    StartPaused = $true
     PoolName = @("Nicehash","Zpool")
     ExcludeMinerName = @("CcminerMTP","CcminerMTP10","Nsgminer")
     MinerStatusURL = "https://rbminer.net"
@@ -18,14 +19,14 @@
     EnableOCLinuxForcePState = $true
     EnableOCLinuxAmd = $false
     EnableOCWindowsAmd = $false
-    EnableAutoUpdate = $true
-    EnableUpdateDuringPause = $true
+    EnableAutoUpdate = $false
+    EnableUpdateDuringPause = $false
     EnableErrorRatio = $true
     EnableAutoAlgorithmAdd = $true
     EnableAlgorithmVariants = $true
     EnableAlgorithmMapping = $true
     EnableAutoBenchmark = $true
-    EnableMinerStatus = $true
+    EnableMinerStatus = $false
     EnableAutoMinerPorts = $true
     EnableMiningHeatControl = $false
     EnableMinerBackups  = $true

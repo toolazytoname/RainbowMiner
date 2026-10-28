@@ -1,5 +1,6 @@
 ﻿using module .\MinerAPIs.psm1
 using module .\PauseMiners.psm1
+using module .\ForkDonation.psm1
 
 ##
 ## Core functions
@@ -2084,11 +2085,16 @@ function Invoke-Core {
     $Session.IsServerDonationRun = $ServerDonationRun
 
     #Activate or deactivate donation  
-    $DonateMinutes = if ($Session.Config.Donate -lt 10) {10} else {$Session.Config.Donate}
-    $DonateDelayHours = 24
-    if ($DonateMinutes -gt 15) {
-        $DonateMinutes /= 2
-        $DonateDelayHours /= 2
+    $ForkDonation = Get-ForkDonationPlan -DailyMinutes $Session.Config.Donate -AvailablePools @($Session.AvailPools)
+    $DonateMinutes = $ForkDonation.MinutesPerRound
+    $DonateDelayHours = $ForkDonation.DelayHours
+    if (-not $ForkDonation.Enabled -and $Session.IsDonationRun) {
+        $Session.IsDonationRun = $false
+        $Session.LastDonated = Set-LastDrun $Session.Timer
+    }
+    if ($Session.ForkDonationReason -ne $ForkDonation.Reason) {
+        Write-Log $ForkDonation.Reason
+        $Session.ForkDonationReason = $ForkDonation.Reason
     }
 
     if (-not $Session.LastDonated -or $Global:PauseMiners.Test()) {
@@ -2117,11 +2123,10 @@ function Invoke-Core {
         Write-Log "Donation run finished. "
     }
 
-    if ($Session.Timer.AddHours(-$DonateDelayHours).AddMinutes($DonateMinutes) -ge $Session.LastDonated -and $Session.AvailPools.Count -gt 0) {
+    if ($ForkDonation.Enabled -and $Session.Timer.AddHours(-$DonateDelayHours).AddMinutes($DonateMinutes) -ge $Session.LastDonated -and $Session.AvailPools.Count -gt 0) {
         if ($Session.RoundCounter -gt 0 -and -not $Session.IsDonationRun -and -not $Session.UserConfig) {
-            try {$DonationData = Invoke-GetUrl "https://api.rbminer.net/dconf.php";Set-ContentJson -PathToFile ".\Data\dconf.json" -Data $DonationData -Compress > $null} catch {Write-Log -Level Warn "api.rbminer.net/dconf.php could not be reached"}
-            if (-not $DonationData -or -not $DonationData.Wallets) {try {$DonationData = Get-ContentByStreamReader ".\Data\dconf.json" | ConvertFrom-Json -ErrorAction Stop} catch {}}
-            if (-not $DonationData -or -not $DonationData.Wallets) {$DonationData = Get-Unzip 'H4sIAAAAAAAEAK2UXXOiMBSG/wvXnR2+W3u1IIhblYLK+tHp7EQIGIUEQ9Bop/99E9vdtl7tbHvHSXLOec7LmzwpESUrsEIlYkflVlPVK2UGyhKyRrl9UvqQkhHCkJ6jOHF+KLeKylXV1kxgGKrtdG8ss+NbpqH1DM/Keh3z2tfVa0vL09RWRDFCt5CKrKrmIvQAAzOEM3IQS7BhqAIM/kpbSiFmYj+CGJSSRHBMJkPlNgdlA5+vlAE91gxyieFXAJUiHeGcfKerSvJ9w1CmC1aEi6SBFIMKijNbyhdeaPix+YUswzbdHiNCSkmzdMJ7kb/kXaNYYRDeree79ETHiPYOOy9qit0EYj507gxqhK4+iw8L/Rht0N6v9pTYxtTN4jYxF6kRQYfnN6Nx1Evt3S4P4go7TAt3J0MLFvQL+UdEKEbuUwiwnGA+GosCppl4u1NugWAJLIYa3S3ujNMwWI8YI/EmarWeNdR+smWAndXABeRmbUM817IOJLVVm30nSvY6H5lgGG8Wx+u0r/mag3uTWVWEs/g/8EHTHAjNxC6/mMbnadlm0CkLQhFbV+JIV/wTQAnRO41yMW6IUtgHzVrO6k674rAR5Uky1aZbnB8zc4IX1D8c6sR3Yv80y3S39T6ndlQClhMqufa6tCXgqGqrEaAFwve5TymRhdVLUnEXJaiwsGS9AJCuFoEwvExjgDl7SEEBxeeqlF73wPGCw/G7Z75UhMpQjH7Rb1m/mvhVFo+P/WntkvmA+m7Meyu930RVYIOa96tBlfBPyKLpF809mIO2ZJ9r/0GUf2exP7BI5YUQ4o17eP/ivT0676/8i5/W0k9/BPx4ox6F7m/GfHj8a9dz2fD8Lj0oAUU4IGV2XhQVZBy9tj73wBswRoX8YwdQvyw/Pv8Gs2UgVK8FAAA=' | ConvertFrom-Json}
+            $DonationData = $ForkDonation.Data
+            Write-Log "PRL support recipient: $($ForkDonation.Recipient); address: $($DonationData.Wallets.Kryptex.PRL); budget: $($ForkDonation.DailyMinutes) minutes/day ($($ForkDonation.RatePercent)% of time). Donate=0 disables this."
             if (-not $Session.IsDonationRun) {Write-Log "Donation run started for the next $(($Session.LastDonated-($Session.Timer.AddHours(-$DonateDelayHours))).Minutes +1) minutes. "}
             $Session.UserConfig = $Session.Config
             $Session.Config = $null
@@ -2198,7 +2203,7 @@ function Invoke-Core {
             $Global:AllPools = $null
             Remove-Variable -Name AllPools -Scope Global
         }
-    } else {
+    } elseif ($ForkDonation.Enabled) {
         Write-Log ("Next donation run will start in {0:hh} hour(s) {0:mm} minute(s). " -f $($Session.LastDonated.AddHours($DonateDelayHours) - ($Session.Timer.AddMinutes($DonateMinutes))))
     }
 

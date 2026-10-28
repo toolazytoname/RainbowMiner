@@ -20,6 +20,7 @@ if %errorlevel%==1 (
     powershell -version 5.0 -executionpolicy bypass -windowstyle maximized -command "%command%"
     if %errorlevel%==999 (
         powershell -version 5.0 -executionpolicy bypass -windowstyle maximized -command "%updater%"
+        if errorlevel 1 goto end
         goto restart
     )
     goto end
@@ -28,6 +29,7 @@ if %errorlevel%==1 (
 pwsh -executionpolicy bypass -windowstyle maximized -command "%command%"
 if %errorlevel%==999 (
     pwsh -executionpolicy bypass -command "%updater%"
+    if errorlevel 1 goto end
     goto restart
 )
 

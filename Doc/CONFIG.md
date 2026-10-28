@@ -65,8 +65,8 @@ An example:
 - **APImaxLoginAttemps** = Maximum number of failed login attempts, until IP gets blocked (0=turn off) [default=3]
 - **APIblockLoginAttemptsTime** = Enter timespan, that an IP gets blocked, after the defined failed login attempts (units allowed, e.g. 1h=one hour, default unit is s=seconds) [default=30m]
 - **APIallowIPs** = Restrict access to the API to specific IP addresses. Comma separated list of IPv4 or IPv6, wildcards (10.0.0.*) and CIDR (192.168.1.0/28, fe80::/10) allowed [default=]
-- **EnableAutoUpdate** = set to 1 if you want RainbowMiner to be updated automatically [default=1]
-- **EnableUpdateDuringPause** = set to 1 if you want RainbowMiner to be updated automatically, even if it is paused [default=1]
+- **EnableAutoUpdate** = set to 1 if you want RainbowMiner to be updated automatically [default=0]
+- **EnableUpdateDuringPause** = set to 1 if you want RainbowMiner to be updated automatically, even if it is paused [default=0]
 - **EnableUpdateWhenScheduled** = set to 1 if the automatic updates should be scheduled: set EnableUpdate to 1 for a schedule in scheduler.config.txt (also, EnableAutoUpdate must be set to 1) [default=0]
 - **EnableAutoAlgorithmAdd** = set to 1 if Rainbowminer should add all newly added algorithms to your config.txt, during (automatic) update
 - **EnableMinerStatus** = set to 1 to enable central monitoring
@@ -402,22 +402,18 @@ The two overclocking options and how to choose between them are described in
 ### Start and pause behaviour
 
 - **Quickstart** = set to 1 to read all pool data from cache during startup (speeds up first start, but balance data may be out of date)
-- **StartPaused** = set to 1 to start RainbowMiner in pause mode (no mining, you will have to press "P" to enable mining)
+- **StartPaused** = set to 1 to start RainbowMiner in pause mode (no mining, you will have to press "P" to enable mining); this fork defaults to 1
 - **EnablePauseOnActivity** = set to 1 to automatically send RainbowMiner into pause mode, if user input is detected (also see **ResumeOnInactivitySeconds**) [default=0]
 - **EnablePauseOnBattery** = set to 1 to automatically send RainbowMiner into pause mode, if notebook runs on battery (Windows only) [default=0]
 - **ResumeOnInactivitySeconds** = seconds of no user input, until RainbowMiner leaves pause-on-activity mode (0 = never) [default=300]
 
 ### Developer fee
 
-- **Donate** = set the minutes, you want RainbowMiner to work for the developer (min. is 10 minutes, equals to 0.7%) [default=24]
+This is the Xiaotutou PRL fork. `Donate` is support time in minutes per day: default 24 (about 1.67% of time), **0 disables it**. Positive values below 10 are respected. Pool and miner fees are separate.
 
-This is the only fee RainbowMiner takes, and it is a share of *time*, not of your earnings:
-for the configured number of minutes per 24 hours, the rig mines to the developer's pools.
-The minimum of 10 minutes equals 0.7% of a day.
+The public recipient, PRL network and Kryptex-only policy are in [`Data/ForkDonation.json`](../Data/ForkDonation.json). No remote donation wallet overrides are used. An invalid/missing policy or unavailable pool skips the support round without choosing a fallback recipient. Ordinary user-wallet settings are restored after the support round.
 
-Two things keep it fair: a donation round never starts before all benchmarks have finished,
-and the time already spent is stored, so a restart, an update or a crash cannot make a rig
-donate more than the configured minutes per 24 hours.
+See the [Chinese fork guide](FORK-QUICKSTART.zh-CN.md). First launch starts paused; upstream ZIP updates and external rig monitoring are disabled by default in this fork.
 
 ## Maintenance
 

@@ -1,0 +1,8 @@
+{
+  "Name": "Xiaotutou PRL research fork",
+  "Repository": "toolazytoname/RainbowMiner",
+  "Upstream": "RainbowMiner/RainbowMiner",
+  "UpstreamCommit": "a7d68dbe04b45d6b602575e990ef07c69f772bed",
+  "License": "GPL-3.0",
+  "UpdateMethod": "Review changes and use git; upstream ZIP updater is blocked."
+}

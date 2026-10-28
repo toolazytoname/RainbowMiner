@@ -8,6 +8,13 @@ param(
 
 if ($script:MyInvocation.MyCommand.Path) {Set-Location (Split-Path $script:MyInvocation.MyCommand.Path)}
 
+# Preserve this fork's source changes and recipient configuration.
+if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Data/ForkInfo.json')) {
+    Write-Host 'Upstream ZIP updates are disabled for the Xiaotutou fork. Review changes and update this Git checkout instead.' -ForegroundColor Yellow
+    exit 2
+}
+
+
 #[Environment]::CurrentDirectory = $ExecutionContext.SessionState.Path.CurrentFileSystemLocation
 
 if ([Net.ServicePointManager]::SecurityProtocol -notmatch [Net.SecurityProtocolType]::Tls12) {
