@@ -2,6 +2,7 @@
 """Coexistence monitor: CPU jobs have priority; only stop our own miner on GPU conflict."""
 import ctypes as c,datetime,json,os,pathlib,subprocess,time
 from gpu_clients import gpu_processes,DESKTOP_PROCESSES
+from process_identity import handle_identity,normalized
 ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';K=c.WinDLL('kernel32',use_last_error=True)
 K.OpenProcess.restype=c.c_void_p;K.OpenProcess.argtypes=[c.c_uint,c.c_int,c.c_uint]
 K.CloseHandle.argtypes=[c.c_void_p];K.SetPriorityClass.argtypes=[c.c_void_p,c.c_uint]
@@ -15,7 +16,7 @@ def ticks():
  a=c.c_ulonglong();b=c.c_ulonglong();d=c.c_ulonglong()
  if not K.GetSystemTimes(c.byref(a),c.byref(b),c.byref(d)):raise c.WinError(c.get_last_error())
  return a.value,b.value+d.value
-def priority(pid,expected):
+def priority(pid,expected,identity=None):
  if not pid:return False
  h=K.OpenProcess(0x1200,False,int(pid))
  if not h:return False
@@ -23,6 +24,9 @@ def priority(pid,expected):
   n=c.c_uint(32768);buf=c.create_unicode_buffer(n.value)
   if not K.QueryFullProcessImageNameW(h,0,buf,c.byref(n)):return False
   if pathlib.Path(buf.value).name.lower()!=expected:return False
+  if identity:
+   actual=handle_identity(h,int(pid))
+   if actual['CreationFileTime']!=identity.get('CreationFileTime') or normalized(actual['Executable'])!=normalized(identity.get('Executable','')):return False
   return bool(K.SetPriorityClass(h,0x4000))
  finally:K.CloseHandle(h)
 def clients():
@@ -37,7 +41,7 @@ try:
   if s['Status']=='stopped':break
   if s['SessionId']!=sid:
    sid=s['SessionId'];run=pathlib.Path(s['RunDirectory']);prev=ticks();initial=clients();miner=None;baseline=None;pressure=0;coolbusy=0;lastcoolstamp=None;cached=initial;cycle=0
-  cp=priority(s.get('ControllerPid'),'python.exe');mp=priority(s.get('MinerPid'),'krig-miner.exe')
+  cp=priority(s.get('ControllerPid'),'python.exe',s.get('ControllerIdentity'));expected=pathlib.Path((s.get('ComputeBackend') or {}).get('Executable','krig-miner.exe')).name.lower();mp=priority(s.get('MinerPid'),expected,s.get('MinerIdentity'))
   idle,total=ticks();di=idle-prev[0];dt=total-prev[1];prev=(idle,total);cpu=round(100*(1-di/dt),1) if dt else 0
   mem=Mem();mem.length=c.sizeof(mem);K.GlobalMemoryStatusEx(c.byref(mem))
   g=s.get('LastTelemetry',{});pid=s.get('MinerPid');reason=None

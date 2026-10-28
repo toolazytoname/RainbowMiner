@@ -15,6 +15,7 @@ if($Action -eq 'Status'){
  exit 0
 }
 if($Action -eq 'Stop'){
+ foreach($file in 'stop.request','cancel.request'){New-Item -ItemType File -Path (Join-Path $runtime $file) -Force | Out-Null}
  Start-ScheduledTask -TaskName 'LazyPC-PearlMining-Recover'
  Write-Host 'Stop requested. Check Status for miner exit and power restoration.'
  exit 0

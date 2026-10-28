@@ -158,7 +158,7 @@ class CleanupTests(unittest.TestCase):
         child=Mock(pid=123);child.poll.return_value=None
         with tempfile.TemporaryDirectory() as td:
             c.run=pathlib.Path(td)
-            with patch.object(pc,'verified_pool_transport',return_value=relay),patch.object(pc.subprocess,'Popen',return_value=child):
+            with patch.object(pc,'verified_pool_transport',return_value=relay),patch.object(pc.subprocess,'Popen',return_value=child),patch.object(pc,'capture_owned_child',return_value={'Pid':123}):
                 with self.assertRaisesRegex(pc.EndSession,'verified_tls_relay_unavailable'):c.mine(220,60,'relay-fault')
         child.terminate.assert_called_once();relay.__exit__.assert_called_once()
         self.assertIsNone(c.proc);self.assertTrue(c.s['PowerRestored'])

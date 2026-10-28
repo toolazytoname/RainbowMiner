@@ -7,6 +7,7 @@ import contextlib,argparse,ctypes,datetime,hashlib,json,math,os,pathlib,statisti
 from gpu_driver import Gpu
 from pool_transport import verified_pool_transport
 from compute_backend import select_compute_backend,read_source_stats,BackendStatsError
+from process_identity import capture_owned_child,capture_controller
 from gpu_clients import gpu_processes,DESKTOP_PROCESSES
 SOURCE=pathlib.Path(__file__).parent;ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';EXE=ROOT/'1.5.12/krig-miner.exe'
 PY=pathlib.Path(sys.executable);STOP=RT/'stop.request';CANCEL=RT/'cancel.request'
@@ -137,7 +138,7 @@ class Controller:
    self.s['VerifiedTlsRelay']={'Upstream':relay.state['upstream'],'ClientEndpoint':endpoint,'Receipt':str(sub/'tls-status.json'),'ControllerPid':os.getpid(),'CertificateRequired':True,'HostnameRequired':True};self.save()
    args=self.backend.command(endpoint,self.cfg);self.backend_log=sub/'miner.log'
    self.proc=subprocess.Popen(args,cwd=self.backend.executable.parent,env=self.backend.environment(),stdout=log,stderr=err,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
-   self.s['MinerPid']=self.proc.pid;self.save()
+   self.s['MinerPid']=self.proc.pid;self.s['MinerIdentity']=capture_owned_child(self.proc);self.save()
    while True:
     if relay.error or not relay.thread.is_alive():raise GuardStop('verified_tls_relay_unavailable')
     if self.proc.poll() is not None:raise GuardStop('miner_exited')
@@ -185,10 +186,10 @@ class Controller:
    else:
     self.run=pathlib.Path('D:/AI/Playgrounds')/('RainbowMiner' if self.backend.kind=='soat' else 'KRig')/(datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+self.backend.kind+'-'+self.mode);self.run.mkdir(parents=True)
    self.s={'SessionId':self.run.name,'Status':'starting','Mode':self.mode,'ControllerPid':os.getpid(),'MinerPid':None,'StartTime':now(),'OriginalPowerWatts':self.original,'MiningPowerWatts':0,'PowerRestored':False,'RunDirectory':str(self.run),'Wallet':self.cfg['wallet'],'Worker':self.cfg['worker'],'Pool':self.cfg['pool'],'LastTelemetry':g,'StopReason':None,'ThermalGuards':{'Core':80,'Hotspot':100,'MemoryJunction':96},'ClocksAndFans':'driver automatic; unchanged','SecuritySettingsChanged':False}
-   self.s['ComputeBackend']=self.backend.receipt();self.s['ReportedRate']=0;self.s['ReportedRateUnit']=self.backend.rate_unit
+   self.s['ControllerIdentity']=capture_controller();self.s['ComputeBackend']=self.backend.receipt();self.s['ReportedRate']=0;self.s['ReportedRateUnit']=self.backend.rate_unit
    self.s['ManagementSourceDirectory']=str(SOURCE)
    self.s['ManagementSourceSha256']={}
-   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py','pool_transport.py','tls_relay.py','compute_backend.py']:
+   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py','pool_transport.py','tls_relay.py','compute_backend.py','process_identity.py','recover_session.py','coexist_monitor.py']:
     with (SOURCE/filename).open('rb') as code:self.s['ManagementSourceSha256'][filename]=hashlib.file_digest(code,'sha256').hexdigest()
    self.save()
    subprocess.Popen([str(PY),str(SOURCE/'coexist_monitor.py')],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)

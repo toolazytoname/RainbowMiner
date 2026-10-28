@@ -12,21 +12,23 @@ def main():
  start=time.monotonic();session=None
  while time.monotonic()-start<240:
   session=load(RT/"session.json")
-  if session["Status"]=="running" and session.get("MinerPid") and session.get("HashrateTHs",0)>0:break
+  if session["Status"]=="running" and session.get("MinerPid") and session.get("ReportedRate",session.get("HashrateTHs",0))>0:break
   time.sleep(1)
  else:raise RuntimeError("No active owned mining session became ready")
- if process_names().get(int(session["MinerPid"]))!="krig-miner.exe":raise RuntimeError("Expected owned KRig process is not running")
+ kind=(session.get("ComputeBackend") or {}).get("Kind","krig");expected="soat-miner.exe" if kind=="soat" else "krig-miner.exe"
+ if process_names().get(int(session["MinerPid"]))!=expected:raise RuntimeError("Expected owned compute process is not running")
  cfg=load(ROOT/"mining-config.json")
  if session.get("Wallet")!=cfg["wallet"] or session.get("Pool")!=cfg["pool"]:raise RuntimeError("Unexpected session identity")
  with a.helper.open("rb") as f:digest=hashlib.file_digest(f,"sha256").hexdigest()
  state={"time":datetime.datetime.now(datetime.timezone.utc).isoformat(),"session_id":session["SessionId"],"helper":str(a.helper),"helper_sha256":digest,"helper_scope":"one 8 MiB memset and 20 seconds idle; not a heavy compute workload","before":session,"passed":False};child=None
  try:
-  state["native_api_checks"]=[]
+  state["backend_checks"]=[]
+  checker="Test-PearlSourceLive.ps1" if kind=="soat" else "Test-KRigLive.ps1"
   for label,ps in [("ps7","D:/Apps/PowerShell/7/pwsh.exe"),("ps51","C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe")]:
-   check=a.output/(label+"-native-api")
-   run=subprocess.run([ps,"-NoProfile","-ExecutionPolicy","RemoteSigned","-File",str(pathlib.Path(__file__).resolve().parents[2]/"Tests/Test-KRigLive.ps1"),"-EvidenceDirectory",str(check)],capture_output=True,timeout=30)
-   (a.output/(label+"-native-api.log")).write_bytes(run.stdout+run.stderr);state["native_api_checks"].append({"shell":label,"exit_code":run.returncode,"result":str(check/"live-api-result.json")})
-   if run.returncode:raise RuntimeError("Native API live check failed: "+label)
+   check=a.output/(label+"-backend-check")
+   run=subprocess.run([ps,"-NoProfile","-ExecutionPolicy","RemoteSigned","-File",str(pathlib.Path(__file__).resolve().parents[2]/("Tests/"+checker)),"-EvidenceDirectory",str(check)],capture_output=True,timeout=30)
+   (a.output/(label+"-native-api.log")).write_bytes(run.stdout+run.stderr);state["backend_checks"].append({"shell":label,"exit_code":run.returncode,"result":str(check/("source-live-result.json" if kind=="soat" else "live-api-result.json"))})
+   if run.returncode:raise RuntimeError("Backend live check failed: "+label)
   state["before"]=load(RT/"session.json");state["gpu_clients_before"]=gpu_processes()
   with (a.output/"context-helper.log").open("wb") as log:
    child=subprocess.Popen([str(a.helper),"20"],stdout=log,stderr=log,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS);state["helper_pid"]=child.pid;started=time.monotonic()

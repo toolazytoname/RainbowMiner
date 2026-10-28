@@ -17,7 +17,7 @@ def main():
   call("Start");end=time.monotonic()+240
   while time.monotonic()<end:
    current=load(RT/"session.json")
-   if current["SessionId"]!=original["SessionId"] and current["Status"]=="running" and current.get("HashrateTHs",0)>0:break
+   if current["SessionId"]!=original["SessionId"] and current["Status"]=="running" and current.get("ReportedRate",current.get("HashrateTHs",0))>0:break
    time.sleep(1)
   else:raise RuntimeError("Mining did not become ready")
   state["before_stop"]=current;call("Stop");started=time.monotonic()

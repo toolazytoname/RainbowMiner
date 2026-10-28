@@ -1,48 +1,50 @@
-# One-shot Pearl experience supervisor
+# One-shot Pearl workstation manager
 
-This directory is the versioned management entry for an existing, authorized Windows RTX 3090 / KRig installation. It does not contain a mining compute kernel. The MIT [soat-miner experiment](https://github.com/toolazytoname/soat-miner/tree/xiaotutou-prl3090) owns the separate open CUDA kernel work. KRig is a separately obtained release binary; no kernel source is claimed for KRig.
+The default workstation route runs the pinned MIT [SOAT CUDA backend](https://github.com/toolazytoname/soat-miner/tree/xiaotutou-prl3090) through an owned, certificate- and hostname-verified TLS relay to the original Kryptex PRL pool. This GPL management repository owns start/stop, telemetry, resource guards and the first-payout experience. The separate MIT repository contains the modifiable compute kernels. Users need one start/stop entry.
 
-## Responsibilities and limits
+The tested source build has no miner developer-fee round. The full upstream RainbowMiner profit-switching/support loop is not run by this local manager. KRig remains a separate optional binary and native adapter. A local negative test showed that KRig 1.5.12 accepted a self-signed certificate; the verified loopback relay then made that vendor classify the visible endpoint as a third-party pool and charge 3%. The backend selector therefore refuses KRig relay use unless `allow_krig_relay_fee` is explicitly true. It never silently falls back to KRig or CPU.
 
-- One user start/stop entry; an interactive scheduled task starts the backend. No boot or login mining trigger is added.
-- SHA-256 checks on the configured KRig executable. The original TLS pool URL stays in local configuration; our loopback relay requires a trusted certificate and matching hostname before forwarding any miner payload. KRig connects only to the relay, so a `stratum+tcp://127.0.0.1` child command is local traffic, not a plaintext Internet route.
-- At most 220 W; core / hotspot / memory guards are 80 / 100 / 96 C. Clocks, voltage and fans remain automatic.
-- A named mutex is shared with the source experiment; another GPU application prevents startup or stops our own miner. CPU workloads are allowed, and our processes use BelowNormal priority.
-- Stop and restore the starting board power cap. Preserve an external cap change. An owned child that cannot stop keeps its reduced cap and process reference. Finalization records `stop-failed`, not `stopped`, and raises instead of entering read-only payout waiting.
-- Stop when confirmed plus pending pool balance reaches the first payout threshold, or the pool records a payout. Pending maturity does not require further mining.
-- Preserve the original mining deadline from `Runtime/payout-experience.json` across every restart. The per-run minutes limit can be shorter. No implicit extension, currency trading, wallet signing or automatic restart.
-- The public pool API is checked before mining and watched while running. Thirty minutes of continuous pool API failure ends mining. After reaching the threshold, read-only payout watching lasts at most 12 hours. Manual Stop cancels this watcher as well: idle gaps check the stop request every second; each of the two public API requests has an 8-second network timeout. Cancelling queries never changes the pool balance or starts the GPU.
+## Operation
 
-These files are a local supervisor in this fork, not a claim that the full upstream RainbowMiner web UI has been validated. The native KRig adapter is documented separately in `Doc/KRIG-INTEGRATION.md`.
-
-## Environment
-
-Windows only; Python 3.12.15 in this repository's `.venv`; standard library only. The vendored MIT relay retains its source attribution and `TLS-RELAY-LICENSE.txt`. The existing install is `D:\Apps\KRig`, with binary `1.5.12/krig-miner.exe`, `mining-config.json`, and runtime state. `PRL_EXPERIENCE_HOME` can select a different local root for Python checks; the install script intentionally targets the existing local installation. Configuration, logs, wallet keys and executables are not committed.
-
-Run the hardware-free checks (including `-O` so runtime guards cannot depend on assertions):
+Use the existing desktop Pearl panel, or from this repository:
 
 ```powershell
-.\.venv\Scripts\python.exe Scripts\PearlExperience\test_experience.py
-.\.venv\Scripts\python.exe -O Scripts\PearlExperience\test_experience.py
-.\.venv\Scripts\python.exe Scripts\PearlExperience\test_tls_transport.py
-```
-
-`Install-Tasks.ps1` is an explicit local deployment, not a miner start. It checks stopped tasks and safety tests, backs up the three task XML definitions and existing launcher to `D:\AI\Playgrounds\RainbowMiner`, points the three bounded mining/calibration tasks at this source, and leaves recovery and the existing desktop panel installed. Inspect the receipt and source before running it. No Defender or global execution-policy changes are made.
-
-```powershell
-.\Scripts\PearlExperience\Install-Tasks.ps1
 .\Scripts\PearlExperience\Manage-Pearl.ps1 -Action Status
 .\Scripts\PearlExperience\Manage-Pearl.ps1 -Action Start -Minutes 60
 .\Scripts\PearlExperience\Manage-Pearl.ps1 -Action Stop
 ```
 
-A previous one-shot experience state is deliberately required by the entry script. This installation preserves an existing authorized experiment; it does not silently create a fresh unlimited mining budget. Runtime records are under `D:\Apps\KRig\Runtime`, mining evidence under `D:\AI\Playgrounds\KRig`.
+Source rates are explicitly **T MAC/s**. They are not relabeled as KRig TH/s, pool credits or currency. The source backend has an append-only JSON log, not a separate HTTP API. Session records identify the actual compute executable/hash, selected shape/tile, source-file hashes, exact process creation identities, reported units, temperatures and TLS receipt.
 
+## Invariants
 
-The `LazyPC-PearlTuning` task now uses this same bounded experience with `--calibrate`. Its public-pool watcher remains active across the calibration profiles and intervening cooldowns. Thermal/resource failure aborts the calibration instead of choosing an earlier profile and resuming automatically. Cooldown also yields to a newly present GPU application. The original deadline and first payout threshold apply throughout; no new heavy calibration is launched by deployment.
+- One heavy GPU workload: a named mutex is shared with source experiments. Existing GPU work blocks startup; an incoming GPU client stops only our owned miner. CPU workloads are allowed, and our controller/miner use BelowNormal priority.
+- At most 220 W, with core/hotspot/memory guards of 80/100/96 C. Clocks, voltage and fans remain automatic. No CPU fallback, Defender exclusions, driver changes or boot/login mining trigger.
+- Stop and restore the starting power cap; preserve an external cap change. A child that cannot exit keeps the reduced cap and a `stop-failed` state. Recovery verifies the original Windows process handle's PID, exact creation FILETIME, executable and SHA-256 before any forced owned termination. It does not kill processes by name or restore power while owned work remains alive.
+- Preserve the original `MiningDeadline` in the existing payout state across restarts. A shorter manual duration still applies. Stop at confirmed plus pending balance reaching the first payout threshold, or at a recorded payout. No automatic restart, currency exchange, wallet signing or private-key access.
+- Check the public pool before startup and while mining. Thirty minutes of continuous pool API failure ends mining. After the threshold, release the GPU and watch payout read-only for at most 12 hours. Manual Stop cancels read-only watching too; idle gaps check every second, and each public API request has an 8-second network timeout.
+- Authenticate the original pool before forwarding a single miner payload. The child command's `127.0.0.1` endpoint is internal traffic. There is no plaintext Internet fallback. A failed relay thread, invalid source units/backend, or stale source telemetry stops the session.
 
-`test_live_gpu_yield.py` and `test_live_manual_stop.py` are explicit live integration checks, not import-time actions or ordinary offline tests. The former requires the separately compiled bounded context helper from the source repository, checks actual native APIs, then simulates an incoming tiny GPU client. Do not run it casually while using your own GPU work. The latter starts a two-minute bounded test through the ordinary Start entry and invokes Stop once hashrate is positive. Evidence lives outside Git.
+Only the GPU-validated `4096x65536` / `=ampere large s3 fold k64` source configuration is enabled here. The local config pins the executable SHA-256. Rebuilding a changed kernel requires repeating complete-transcript, performance and pool gates before updating that pin.
 
-Ordinary users should use `Manage-Pearl.ps1` or the existing panel. `pearl_controller.py` is a developer building block; the payout experience supplies the cumulative goal and deadline bounds. Session records now include management source-file SHA-256 values so a live run can be tied to its code.
+## Deployment and checks
 
-A local negative probe against the pinned KRig 1.5.12 binary found that it accepted an untrusted self-signed certificate and sent application bytes. No jobs were provided. Our supervisor therefore supplies mandatory certificate and hostname verification independently of vendor TLS behavior. TLS receipts and supervisor source hashes are recorded with each session; a failed relay thread ends mining. Native API checks bind the actual miner parent and relay socket to this receipt. The standalone full RainbowMiner adapter still uses vendor TLS and has no claim of an independently verified certificate policy.
+Windows Python 3.12.15 uses this repository's `.venv`; runtime code uses the standard library. The vendored relay retains its MIT attribution in `TLS-RELAY-LICENSE.txt`.
+
+```powershell
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_experience.py
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_compute_backend.py
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_tls_transport.py
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_process_identity.py
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_recovery.py
+```
+
+The 49 CPU-side checks also pass with `-O`: local TLS servers and bounded owned CPU children are used, with no GPU workload. The native KRig adapter's separate 19 offline cases pass in both PS7 and PS5.1.
+
+`Install-Tasks.ps1` is an explicit deployment, not a mining start. It requires stopped tasks, runs the checks, backs up all five task XML definitions and old launchers, and installs versioned mining/experience/calibration, exact-identity recovery, and the unit-aware panel. None has a boot/login trigger. Existing local config and the previous payout deadline are deliberately required; installation does not create a new unlimited budget.
+
+The live source checker is `Tests/Test-PearlSourceLive.ps1 -EvidenceDirectory <Windows run folder> -RequireAccepted`. It checks the actual process, creation identity, pinned binary/management hashes, exact CUDA JSON sample, selected configuration and authenticated relay socket without starting a miner. `test_live_gpu_yield.py` and `test_live_manual_stop.py` are explicit live integration tests. The current source-manager live gates remain pending until their Windows receipts pass; old KRig tests are not substituted for them. No full upstream web UI/download/startup claim is made.
+
+## Storage
+
+Config and shared runtime state stay in `D:\Apps\KRig` for existing entry compatibility. New source-managed sessions are under `D:\AI\Playgrounds\RainbowMiner`; prior KRig runs remain under `D:\AI\Playgrounds\KRig`. Source-kernel experiments remain under `D:\AI\Playgrounds\soat-miner`. Code stays one repository per `D:\Projects\<owner>\<repo>`. Config, logs, wallet keys and binaries are not committed.
