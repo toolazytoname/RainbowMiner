@@ -131,6 +131,24 @@ class CleanupTests(unittest.TestCase):
         c=self.controller();child=Mock();child.poll.return_value=None;child.wait.side_effect=TimeoutError();c.proc=child
         with self.assertRaises(RuntimeError):c.stop_miner()
         c.gpu.power.assert_not_called();self.assertIs(c.proc,child);self.assertTrue(c.changed)
+    def test_session_finalizer_never_claims_stopped_for_live_child(self):
+        c=self.controller();child=Mock();child.poll.return_value=None;child.wait.side_effect=TimeoutError();c.proc=child
+        with tempfile.TemporaryDirectory() as td:
+            c.run=pathlib.Path(td)
+            with self.assertRaisesRegex(RuntimeError,'refusing a stopped status'):
+                c.finalize_session('payout_threshold_accumulated')
+            saved=json.loads((c.run/'session-result.json').read_text())
+        c.gpu.power.assert_not_called();self.assertIs(c.proc,child);self.assertTrue(c.changed)
+        self.assertEqual(saved['Status'],'stop-failed');self.assertTrue(saved['OwnedChildAlive'])
+        self.assertEqual(saved['MinerPid'],123)
+    def test_session_finalizer_records_stopped_only_after_cleanup(self):
+        c=self.controller()
+        with tempfile.TemporaryDirectory() as td:
+            c.run=pathlib.Path(td);c.finalize_session('user_stop')
+            saved=json.loads((c.run/'session-result.json').read_text())
+        self.assertEqual(saved['Status'],'stopped');self.assertFalse(saved['OwnedChildAlive'])
+        self.assertIsNone(saved['MinerPid']);self.assertTrue(saved['PowerRestored'])
+        c.gpu.power.assert_called_once_with(370)
     def test_missing_sensor_and_gpu_conflict_stop(self):
         c=self.controller();c.proc=Mock(pid=123)
         normal={"Temperature":70,"Hotspot":85,"MemoryJunction":80,"PowerLimit":220}

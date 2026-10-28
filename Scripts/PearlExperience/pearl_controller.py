@@ -85,6 +85,14 @@ class Controller:
    else:self.s['PowerRestored']=False;self.s['ExternalPowerChangePreserved']=current
    self.changed=False
   self.s['MinerPid']=None;self.s['LastTelemetry']=self.gpu.read();self.s['PowerRestored']=abs(self.s['LastTelemetry']['PowerLimit']-self.original)<2;self.save()
+ def finalize_session(self,reason):
+  try:self.stop_miner()
+  except Exception as exc:reason+='; restore_error: '+str(exc)
+  alive=self.proc is not None and self.proc.poll() is None
+  if self.s:
+   self.s.update(Status='stop-failed' if alive else 'stopped',StopReason=reason,OwnedChildAlive=alive,EndTime=now());self.save();write(self.run/'session-result.json',self.s)
+  else:write(RT/'last-start-error.json',{'Time':now(),'Reason':reason})
+  if alive:raise RuntimeError('Owned miner is still alive; retaining reduced cap and refusing a stopped status')
  def cooldown(self,label):
   self.s.update(Status='cooling',Phase=label,HashrateTHs=0,MiningPowerWatts=0,CooldownReason='至少3分钟；核心≤50℃、热点≤65℃、显存≤65℃，最后1分钟温度波动≤2℃');self.save()
   start=time.monotonic();rows=[]
@@ -186,12 +194,7 @@ class Controller:
    if result['StopReason']!='time_limit':raise EndSession(result['StopReason'])
   except (EndSession,GuardStop) as e:reason=str(e)
   except Exception as e:reason='error: '+str(e)
-  finally:
-   try:self.stop_miner()
-   except Exception as e:reason+='; restore_error: '+str(e)
-   if self.s:
-    self.s.update(Status='stopped',StopReason=reason,EndTime=now());self.save();write(self.run/'session-result.json',self.s)
-   else:write(RT/'last-start-error.json',{'Time':now(),'Reason':reason})
+  finally:self.finalize_session(reason)
 if __name__=='__main__':
  p=argparse.ArgumentParser();p.add_argument('action',choices=['run','check']);p.add_argument('--mode',choices=['mine','calibrate'],default='mine');p.add_argument('--resume-calibration');a=p.parse_args()
  if a.action=='check':print(json.dumps({'Driver':Gpu().read(),'Config':{k:v for k,v in load(ROOT/'mining-config.json').items() if k not in ['wallet','exe_sha256']}}))

@@ -8,7 +8,7 @@ This directory is the versioned management entry for an existing, authorized Win
 - SHA-256 checks on the configured KRig executable; verified TLS URL stays in existing local configuration.
 - At most 220 W; core / hotspot / memory guards are 80 / 100 / 96 C. Clocks, voltage and fans remain automatic.
 - A named mutex is shared with the source experiment; another GPU application prevents startup or stops our own miner. CPU workloads are allowed, and our processes use BelowNormal priority.
-- Stop and restore the starting board power cap. Preserve an external cap change. An owned child that cannot stop keeps its reduced cap and process reference.
+- Stop and restore the starting board power cap. Preserve an external cap change. An owned child that cannot stop keeps its reduced cap and process reference. Finalization records `stop-failed`, not `stopped`, and raises instead of entering read-only payout waiting.
 - Stop when confirmed plus pending pool balance reaches the first payout threshold, or the pool records a payout. Pending maturity does not require further mining.
 - Preserve the original mining deadline from `Runtime/payout-experience.json` across every restart. The per-run minutes limit can be shorter. No implicit extension, currency trading, wallet signing or automatic restart.
 - The public pool API is checked before mining and watched while running. Thirty minutes of continuous pool API failure ends mining. After reaching the threshold, read-only payout watching lasts at most 12 hours. Manual Stop cancels this watcher as well: idle gaps check the stop request every second; each of the two public API requests has an 8-second network timeout. Cancelling queries never changes the pool balance or starts the GPU.
