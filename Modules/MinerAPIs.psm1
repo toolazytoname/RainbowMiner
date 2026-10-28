@@ -1,4 +1,6 @@
-﻿enum MinerStatus {
+﻿Import-Module (Join-Path $PSScriptRoot 'KRig.psm1')
+
+enum MinerStatus {
     Running
     Idle
     Failed
@@ -4384,6 +4386,27 @@ class XmrigWrapper : Miner {
             }
         }
         $MJob = $null
+        $this.CleanupMinerData()
+    }
+}
+
+class KRig : Miner {
+    [Void]UpdateMinerData () {
+        if ($this.GetStatus() -ne [MinerStatus]::Running) {return}
+        try {
+            $data=Invoke-GetUrl "http://127.0.0.1:$($this.Port)/" -Timeout 10 -ForceHttpClient
+            $summary=KRig\Get-KRigApiSummary -Data $data
+        } catch {
+            Write-Log -Level Info "Failed to read a valid KRig API response for $($this.Name)."
+            return
+        }
+        $rates=[PSCustomObject]@{}
+        $name=[string]$this.Algorithm[0]
+        if ($name -and $summary.Hashrate -gt 0) {
+            $rates | Add-Member @{$name=[double]$summary.Hashrate}
+            $this.UpdateShares(0,[double]$summary.Accepted,[double]$summary.Rejected,[double]$summary.Stale)
+        }
+        $this.AddMinerData('',$rates,$null,[double]$summary.PowerDraw)
         $this.CleanupMinerData()
     }
 }

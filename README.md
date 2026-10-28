@@ -8,12 +8,13 @@ An independently maintained fork of [RainbowMiner/RainbowMiner](https://github.c
 - [Kernel review explained in Chinese](Doc/KERNEL-REVIEW.zh-CN.md)
 - [Public, inspectable PRL support policy](Data/ForkDonation.json)
 - [Offline regression tests](Tests/Test-Fork.ps1)
+- [Native KRig adapter and validation](Doc/KRIG-INTEGRATION.md)
 
 **By default, this fork allocates 24 minutes per day (about 1.67% of time) to support its maintainer, Xiaotutou. Set `Donate=0` to disable it. Support rounds are PRL-only. Miner and pool fees are separate. Users configure their own ordinary mining payout wallets; these are distinct from the maintainer's support address.**
 
 New configurations start paused. Upstream automatic updates and external rig monitoring are disabled by default. Installation and startup do not add Defender exclusions. The legacy ZIP updater is blocked to protect fork changes; review and update through Git.
 
-RainbowMiner manages external miners; it does not implement their GPU kernels. This branch already includes the Kryptex pool module and PRL support. A native KRig miner adapter is not implemented yet. Adding an adapter does not itself increase GPU hashrate. Kernel research and native integration are tracked separately in the review.
+RainbowMiner manages external miners; it does not implement their GPU kernels. This branch already includes the Kryptex pool module and PRL support. A native Windows/NVIDIA KRig 1.5.12 adapter is included for PRL on Kryptex TLS, with explicit PCI selection and a loopback-only API. The adapter has 14 passing offline checks on PowerShell 7 and Windows PowerShell 5.1; live API validation remains pending. Adding an adapter does not itself increase GPU hashrate. Kernel research and native integration are tracked separately in the review.
 
 Validation so far covers offline PowerShell logic and syntax (33 passing checks on each of PowerShell 7 and Windows PowerShell 5.1). The full GUI/download/mining flow has not been validated, and no GPU speedup is claimed. The original upstream README is preserved below; its release links refer to upstream, and the fork-specific behavior above takes precedence.
 
