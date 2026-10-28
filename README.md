@@ -1,17 +1,21 @@
-# 小兔头 · RainbowMiner PRL 实验分支
+# Xiaotutou - RainbowMiner PRL fork
 
-这是 [RainbowMiner/RainbowMiner](https://github.com/RainbowMiner/RainbowMiner) 的独立维护 fork，基于 `a7d68dbe04b45d6b602575e990ef07c69f772bed`。保留上游署名、历史和 GPLv3 许可证。
+An independently maintained fork of [RainbowMiner/RainbowMiner](https://github.com/RainbowMiner/RainbowMiner), based on `a7d68dbe04b45d6b602575e990ef07c69f772bed`. Upstream attribution, history and the GPLv3 license are retained.
 
-- [中文上手与收费说明](Doc/FORK-QUICKSTART.zh-CN.md)
-- [本次代码审查、修复与后续优化](Doc/FORK-REVIEW.zh-CN.md)
-- [公开、可检查的 PRL 捐赠配置](Data/ForkDonation.json)
-- [离线回归测试](Tests/Test-Fork.ps1)
+- [Quick start and fee disclosure (Chinese)](Doc/FORK-QUICKSTART.zh-CN.md)
+- [Code review and validation results (Chinese)](Doc/FORK-REVIEW.zh-CN.md)
+- [GPU kernel source and optimization review](Doc/KERNEL-REVIEW.md)
+- [Kernel review explained in Chinese](Doc/KERNEL-REVIEW.zh-CN.md)
+- [Public, inspectable PRL support policy](Data/ForkDonation.json)
+- [Offline regression tests](Tests/Test-Fork.ps1)
 
-**本分支默认每天 24 分钟（约 1.67% 的时间）用于支持维护者“小兔头”。`Donate=0` 可关闭。仅支持 PRL；矿工与矿池可能另外收费。普通用户的挖矿收款地址不属于捐赠地址，仍由用户自行配置。**
+**By default, this fork allocates 24 minutes per day (about 1.67% of time) to support its maintainer, Xiaotutou. Set `Donate=0` to disable it. Support rounds are PRL-only. Miner and pool fees are separate. Users configure their own ordinary mining payout wallets; these are distinct from the maintainer's support address.**
 
-首次启动默认暂停；默认关闭上游自动更新和外部矿机监控。自动安装/启动流程不会添加 Defender 排除项。旧的 ZIP 更新器被阻止覆盖本分支，请通过 Git 审查和更新。
+New configurations start paused. Upstream automatic updates and external rig monitoring are disabled by default. Installation and startup do not add Defender exclusions. The legacy ZIP updater is blocked to protect fork changes; review and update through Git.
 
-当前验证范围：PowerShell 离线逻辑和语法测试。未启动新的矿工，未测试 GUI 完整流程或宣称提高 GPU 算力。下面保留上游 README；与本分支不同的行为以以上中文说明为准。
+RainbowMiner manages external miners; it does not implement their GPU kernels. This branch already includes the Kryptex pool module and PRL support. A native KRig miner adapter is not implemented yet. Adding an adapter does not itself increase GPU hashrate. Kernel research and native integration are tracked separately in the review.
+
+Validation so far covers offline PowerShell logic and syntax (33 passing checks on each of PowerShell 7 and Windows PowerShell 5.1). The full GUI/download/mining flow has not been validated, and no GPU speedup is claimed. The original upstream README is preserved below; its release links refer to upstream, and the fork-specific behavior above takes precedence.
 
 ---
 
