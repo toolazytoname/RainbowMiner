@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
  [ValidateSet('Start','Stop','Status')][string]$Action='Status',
- [ValidateRange(1,1440)][int]$Minutes,
+ [ValidateRange(1,2160)][int]$Minutes,
  [switch]$NoPanel
 )
 $ErrorActionPreference='Stop'

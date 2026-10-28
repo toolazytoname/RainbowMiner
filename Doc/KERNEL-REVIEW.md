@@ -1,5 +1,7 @@
 # Pearl GPU kernel review
 
+Current implementation/result: the MIT SOAT SM86 source backend is now built and validated, with a controlled +9.709% gain over its original kernel and source-manager live acceptance. See [backend selection and evidence](COMPUTE-BACKEND-COMPARISON.md). The initial review below records the earlier investigation; it is not the final runtime status.
+
 Review date: 2026-10-28. Scope: RTX 3090 (Ampere, SM86), Windows, one GPU. This is a source review, not a performance result. The existing KRig experience is still running independently.
 
 ## What is actually controlled by this fork

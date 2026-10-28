@@ -29,12 +29,13 @@ $recoverySettings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -Exe
 Register-ScheduledTask -TaskName 'LazyPC-PearlMining-Recover' -Action $action -Principal $principal -Settings $recoverySettings -Force -Description 'Explicit owned-process stop and power recovery; exact creation-time/image/hash identity; no triggers.'|Out-Null
 $action=New-ScheduledTaskAction -Execute $pwsh -Argument ('-NoProfile -STA -File "'+(Join-Path $PSScriptRoot 'Pearl-Panel.ps1')+'"') -WorkingDirectory $root
 Register-ScheduledTask -TaskName 'LazyPC-PearlPanel' -Action $action -Principal $principal -Settings $settings -Force -Description 'Versioned Pearl control panel; explicit compute units; on-demand only.'|Out-Null
-$oldStart=Join-Path $root 'Start-PearlMining.ps1';$oldPanel=Join-Path $root 'Pearl-Mining-Panel.ps1'
+$oldStart=Join-Path $root 'Start-PearlMining.ps1';$oldPanel=Join-Path $root 'Pearl-Mining-Panel.ps1';$oldRecovery=Join-Path $root 'Stop-And-Recover.ps1'
 Copy-Item -LiteralPath $oldStart -Destination (Join-Path $EvidenceDirectory 'Start-PearlMining.before.ps1')
 Copy-Item -LiteralPath $oldPanel -Destination (Join-Path $EvidenceDirectory 'Pearl-Mining-Panel.before.ps1')
+Copy-Item -LiteralPath $oldRecovery -Destination (Join-Path $EvidenceDirectory 'Stop-And-Recover.before.ps1')
 $entry=Join-Path $PSScriptRoot 'Manage-Pearl.ps1'
 $wrapper=@"
-param([ValidateRange(1,1440)][int]`$Minutes,[switch]`$CheckOnly)
+param([ValidateRange(1,2160)][int]`$Minutes,[switch]`$CheckOnly)
 `$ErrorActionPreference='Stop'
 if(`$CheckOnly){& '$entry' -Action Status;exit `$LASTEXITCODE}
 if(`$PSBoundParameters.ContainsKey('Minutes')){& '$entry' -Action Start -Minutes `$Minutes}else{& '$entry' -Action Start}
@@ -42,6 +43,8 @@ if(`$PSBoundParameters.ContainsKey('Minutes')){& '$entry' -Action Start -Minutes
 [IO.File]::WriteAllText($oldStart,$wrapper,[Text.UTF8Encoding]::new($true))
 $wrapper="& '$pwsh' -NoProfile -STA -File '"+(Join-Path $PSScriptRoot 'Pearl-Panel.ps1')+"'"
 [IO.File]::WriteAllText($oldPanel,$wrapper,[Text.UTF8Encoding]::new($true))
+$wrapper="& '$python' -u '"+(Join-Path $PSScriptRoot 'recover_session.py')+"'`nexit `$LASTEXITCODE"
+[IO.File]::WriteAllText($oldRecovery,$wrapper,[Text.UTF8Encoding]::new($true))
 $receipt=[ordered]@{InstalledAt=(Get-Date).ToString('o');SourceDirectory=$PSScriptRoot;Python=$python;Tasks=$names;TriggersCreated=0;StartedMining=$false;EvidenceDirectory=$EvidenceDirectory;SourceCommit=(& 'D:\Apps\Git\cmd\git.exe' -C $repo rev-parse HEAD).Trim();Policy='Exact captured handles before forced owned termination. No global process kills, boot triggers, Defender or driver changes.'}
 $receipt|ConvertTo-Json -Depth 5|Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'install-result.json') -Encoding UTF8
 $receipt|ConvertTo-Json -Depth 5

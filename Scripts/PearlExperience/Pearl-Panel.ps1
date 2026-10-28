@@ -14,8 +14,9 @@ $phase=LabelAt '' 27 143 590 30;$phase.Name='MiningPhase'
 $metrics=LabelAt '' 27 184 590 85;$metrics.Name='MiningMetrics';$metrics.Font=New-Object Drawing.Font('Microsoft YaHei UI',11)
 $durationLabel=LabelAt '单次运行时限' 27 283 115 28
 $duration=New-Object Windows.Forms.ComboBox;$duration.DropDownStyle='DropDownList';$duration.Location=New-Object Drawing.Point(150,280);$duration.Size=New-Object Drawing.Size(120,28)
+$durationMinutes=[Collections.Generic.List[int]]::new();foreach($value in @(240,480,720,1440)){$durationMinutes.Add($value)}
 [void]$duration.Items.AddRange(@('4 小时','8 小时','12 小时','24 小时'));$duration.SelectedIndex=1;$form.Controls.Add($duration)
-try{$current=Get-Content -LiteralPath (Join-Path $root 'mining-config.json') -Raw -Encoding UTF8|ConvertFrom-Json;$idx=[Array]::IndexOf(@(240,480,720,1440),[int]$current.default_minutes);if($idx -ge 0){$duration.SelectedIndex=$idx}}catch{}
+try{$current=Get-Content -LiteralPath (Join-Path $root 'mining-config.json') -Raw -Encoding UTF8|ConvertFrom-Json;$minutes=[int]$current.default_minutes;$idx=$durationMinutes.IndexOf($minutes);if($idx -lt 0 -and $minutes -ge 1 -and $minutes -le 2160){$durationMinutes.Add($minutes);[void]$duration.Items.Add(([string]$minutes+' 分钟'));$idx=$durationMinutes.Count-1};if($idx -ge 0){$duration.SelectedIndex=$idx}}catch{}
 function ButtonAt($text,$name,$x,$y,$width){$b=New-Object Windows.Forms.Button;$b.Text=$text;$b.Name=$name;$b.Location=New-Object Drawing.Point($x,$y);$b.Size=New-Object Drawing.Size($width,42);$form.Controls.Add($b);return $b}
 $start=ButtonAt '开始挖矿' 'StartMining' 27 325 180;$start.BackColor=[Drawing.Color]::FromArgb(30,95,170);$start.ForeColor=[Drawing.Color]::White;$start.FlatStyle='Flat'
 $stop=ButtonAt '停止并恢复功率' 'StopMining' 222 325 190
@@ -25,7 +26,7 @@ $copy=ButtonAt '复制公开收款地址' 'CopyAddress' 222 383 190
 $help=ButtonAt '操作说明' 'OpenHelp' 427 383 195
 $foot=LabelAt '关闭本窗口不会停止后台挖矿。停止请点按钮；不随开机自动启动。' 27 442 600 23;$foot.Font=New-Object Drawing.Font('Microsoft YaHei UI',9);$foot.ForeColor=[Drawing.Color]::DimGray
 $start.Add_Click({try{
- $minutes=@(240,480,720,1440)[$duration.SelectedIndex]
+ $minutes=[int]($durationMinutes[$duration.SelectedIndex])
  $job=Start-Process -FilePath 'D:\Apps\PowerShell\7\pwsh.exe' -ArgumentList @('-NoProfile','-File',('"'+$manager+'"'),'-Action','Start','-Minutes',[string]$minutes,'-NoPanel') -WindowStyle Hidden -PassThru -Wait
  if($job.ExitCode -ne 0){throw 'Start was refused. Check the current task and original deadline.'}
  $status.Text='正在启动…'
