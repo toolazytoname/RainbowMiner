@@ -88,6 +88,9 @@ class PoolPolicyTests(unittest.TestCase):
         self.assertEqual(relay.host,'prl-hk.kryptex.network')
         self.assertEqual(relay.context.verify_mode,ssl.CERT_REQUIRED)
         self.assertTrue(relay.context.check_hostname)
+    def test_production_factory_preserves_quiet_mining_jobs(self):
+        relay=verified_pool_transport('stratum+ssl://prl-hk.kryptex.network:8048',None)
+        self.assertIsNone(relay.idle_seconds)
     def test_changed_endpoint_or_url_extras_are_rejected(self):
         for url in ['stratum+tcp://prl-hk.kryptex.network:7048','stratum+ssl://foreign.example:8048','stratum+ssl://prl-hk.kryptex.network:7048','stratum+ssl://user@prl-hk.kryptex.network:8048','stratum+ssl://prl-hk.kryptex.network:8048/?skip_tls=true','stratum+ssl://prl-hk.kryptex.network:8048/#insecure']:
             with self.subTest(url=url),self.assertRaises(ValueError):verified_pool_transport(url,None)

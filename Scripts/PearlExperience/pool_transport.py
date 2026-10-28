@@ -10,4 +10,6 @@ def verified_pool_transport(pool_url, receipt):
         or pool.port!=8048 or pool.username or pool.password
         or pool.path not in ('','/') or pool.query or pool.fragment):
         raise ValueError('Expected the original PRL Kryptex TLS endpoint without credentials or extra URL fields')
-    return TlsRelay(pool.hostname,pool.port,receipt=receipt)
+    # A valid job can have no new notifications or shares for several minutes.
+    # The socket keepalive checks TCP liveness without changing mining messages.
+    return TlsRelay(pool.hostname,pool.port,receipt=receipt,idle_seconds=None)
