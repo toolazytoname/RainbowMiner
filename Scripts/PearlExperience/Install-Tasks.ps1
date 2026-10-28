@@ -12,6 +12,8 @@ foreach($name in 'LazyPC-PearlMining','LazyPC-PearlExperience','LazyPC-PearlTuni
 }
 & $python (Join-Path $PSScriptRoot 'test_experience.py')
 if($LASTEXITCODE -ne 0){throw 'Safety tests failed. Tasks were not changed.'}
+& $python (Join-Path $PSScriptRoot 'test_tls_transport.py')
+if($LASTEXITCODE -ne 0){throw 'Strict TLS tests failed. Tasks were not changed.'}
 if(-not $EvidenceDirectory){$EvidenceDirectory='D:\AI\Playgrounds\RainbowMiner\'+(Get-Date -Format 'yyyyMMdd-HHmmss')+'-supervisor-install'}
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $principal=New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Highest

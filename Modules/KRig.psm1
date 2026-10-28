@@ -1,4 +1,4 @@
-﻿# Native KRig integration helpers. No miner launch, network or hardware calls.
+# Native KRig integration helpers. No miner launch, network or hardware calls.
 Import-Module (Join-Path $PSScriptRoot 'ForkDonation.psm1')
 
 function Get-KRigArguments {
@@ -68,4 +68,19 @@ function Get-KRigHttpSysHandler {
     if($handlerIds.Count -ne 1 -or $handlerIds[0] -le 4){throw 'Expected one user-mode HTTP.sys queue handler'}
     [PSCustomObject]@{ProcessId=$handlerIds[0];RequestQueue=$queueMatches[0];ApiPort=$ApiPort}
 }
-Export-ModuleMember -Function Get-KRigArguments,Get-KRigApiSummary,Get-KRigHttpSysHandler
+function Get-KRigSupervisorTlsEvidence {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)]$Session,[Parameter(Mandatory)]$Receipt,
+          [Parameter(Mandatory)][int]$MinerPid,[Parameter(Mandatory)][int]$ParentPid,
+          [ValidateRange(1024,65535)][int]$LocalPort,[Parameter(Mandatory)][int]$SocketOwnerPid)
+    $relay=$Session.VerifiedTlsRelay
+    if($null -eq $relay -or $Session.Status -notin @('running','calibrating')){throw 'No active supervisor TLS evidence'}
+    if($MinerPid -le 4 -or $ParentPid -le 4 -or [int]$Session.MinerPid -ne $MinerPid -or [int]$Session.ControllerPid -ne $ParentPid -or [int]$relay.ControllerPid -ne $ParentPid -or $SocketOwnerPid -ne $ParentPid){throw 'Relay/miner/controller ownership does not match'}
+    if($relay.ClientEndpoint -cne "stratum+tcp://127.0.0.1:$LocalPort" -or $relay.Upstream -cne 'prl-hk.kryptex.network:8048' -or $Receipt.upstream -cne $relay.Upstream -or $Receipt.bind -cne '127.0.0.1' -or [int]$Receipt.local_port -ne $LocalPort){throw 'Relay endpoint does not match the original pool'}
+    foreach($flag in @($relay.CertificateRequired,$relay.HostnameRequired,$Receipt.certificate_required,$Receipt.hostname_check_required)){
+        if($flag -isnot [bool] -or -not $flag){throw 'Certificate and hostname validation must be mandatory booleans'}
+    }
+    if($Receipt.status -cne 'running' -or (ConvertTo-KRigNumber $Receipt.verified_sessions -Integral $true) -lt 1 -or $Receipt.tls_version -notin @('TLSv1.2','TLSv1.3') -or -not $Receipt.cipher){throw 'No authenticated TLS session is active'}
+    [PSCustomObject]@{Verified=$true;Upstream=$relay.Upstream;LocalPort=$LocalPort;ControllerPid=$ParentPid;TlsVersion=$Receipt.tls_version;Cipher=$Receipt.cipher}
+}
+Export-ModuleMember -Function Get-KRigArguments,Get-KRigApiSummary,Get-KRigHttpSysHandler,Get-KRigSupervisorTlsEvidence

@@ -5,6 +5,7 @@ thermal protection, miner exit, or normal Python exception. Driver clocks/fans s
 """
 import contextlib,argparse,ctypes,datetime,hashlib,json,math,os,pathlib,statistics,subprocess,sys,time,urllib.request
 from gpu_driver import Gpu
+from pool_transport import verified_pool_transport
 from gpu_clients import gpu_processes,DESKTOP_PROCESSES
 SOURCE=pathlib.Path(__file__).parent;ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';EXE=ROOT/'1.5.12/krig-miner.exe'
 PY=pathlib.Path(sys.executable);STOP=RT/'stop.request';CANCEL=RT/'cancel.request'
@@ -119,12 +120,16 @@ class Controller:
   self.samples=[];self.last_api={};start=time.monotonic();reason='time_limit';sub=self.run/label;sub.mkdir(exist_ok=True)
   self.s.update(Status='calibrating' if extend else 'running',Phase=label,MiningPowerWatts=watts,PowerRestored=False,HashrateTHs=0,AcceptedShares=0,RejectedShares=0,PlannedStop=(datetime.datetime.now().astimezone()+datetime.timedelta(seconds=seconds+(360 if extend else 0))).isoformat())
   self.save();self.changed=True;self.gpu.power(watts)
-  args=[str(EXE),'--coin','pearl','--url',self.cfg['pool'],'--user',self.cfg['wallet']+'/'+self.cfg['worker'],'--devices-pci','01:00.0','--no-rocm','--no-intel','--api-host','127.0.0.1','--api-port','18490','--no-tui','--log-level','info']
-  log=(sub/'miner.log').open('wb');err=(sub/'miner-error.log').open('wb')
+  log=(sub/'miner.log').open('wb');err=(sub/'miner-error.log').open('wb');relay=None
   try:
+   relay=verified_pool_transport(self.cfg['pool'],sub/'tls-status.json');relay.__enter__()
+   endpoint='stratum+tcp://127.0.0.1:'+str(relay.local_port)
+   self.s['VerifiedTlsRelay']={'Upstream':relay.state['upstream'],'ClientEndpoint':endpoint,'Receipt':str(sub/'tls-status.json'),'ControllerPid':os.getpid(),'CertificateRequired':True,'HostnameRequired':True};self.save()
+   args=[str(EXE),'--coin','pearl','--url',endpoint,'--user',self.cfg['wallet']+'/'+self.cfg['worker'],'--devices-pci','01:00.0','--no-rocm','--no-intel','--api-host','127.0.0.1','--api-port','18490','--no-tui','--log-level','info']
    self.proc=subprocess.Popen(args,cwd=EXE.parent,stdout=log,stderr=err,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
    self.s['MinerPid']=self.proc.pid;self.save()
    while True:
+    if relay.error or not relay.thread.is_alive():raise GuardStop('verified_tls_relay_unavailable')
     if self.proc.poll() is not None:raise GuardStop('miner_exited')
     row=self.telemetry(label);self.samples.append(row);self.guard(row,watts)
     elapsed=time.monotonic()-start
@@ -133,7 +138,11 @@ class Controller:
     time.sleep(5)
   except GuardStop as e:reason=str(e)
   finally:
-   self.stop_miner();log.close();err.close()
+   try:self.stop_miner()
+   finally:
+    try:
+     if relay:relay.__exit__()
+    finally:log.close();err.close()
   end=self.samples[-1]['Epoch'] if self.samples else 0
   tail=[r for r in self.samples if end-r['Epoch']<=180 and r.get('HashrateTHs',0)>0]
   if not tail:raise EndSession(reason if reason!='time_limit' else 'No valid mining hashrate samples')
@@ -167,7 +176,7 @@ class Controller:
    self.s={'SessionId':self.run.name,'Status':'starting','Mode':self.mode,'ControllerPid':os.getpid(),'MinerPid':None,'StartTime':now(),'OriginalPowerWatts':self.original,'MiningPowerWatts':0,'PowerRestored':False,'RunDirectory':str(self.run),'Wallet':self.cfg['wallet'],'Worker':self.cfg['worker'],'Pool':self.cfg['pool'],'LastTelemetry':g,'StopReason':None,'ThermalGuards':{'Core':80,'Hotspot':100,'MemoryJunction':96},'ClocksAndFans':'driver automatic; unchanged','SecuritySettingsChanged':False}
    self.s['ManagementSourceDirectory']=str(SOURCE)
    self.s['ManagementSourceSha256']={}
-   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py']:
+   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py','pool_transport.py','tls_relay.py']:
     with (SOURCE/filename).open('rb') as code:self.s['ManagementSourceSha256'][filename]=hashlib.file_digest(code,'sha256').hexdigest()
    self.save()
    subprocess.Popen([str(PY),str(SOURCE/'coexist_monitor.py')],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)

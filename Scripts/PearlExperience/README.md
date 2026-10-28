@@ -5,7 +5,7 @@ This directory is the versioned management entry for an existing, authorized Win
 ## Responsibilities and limits
 
 - One user start/stop entry; an interactive scheduled task starts the backend. No boot or login mining trigger is added.
-- SHA-256 checks on the configured KRig executable; verified TLS URL stays in existing local configuration.
+- SHA-256 checks on the configured KRig executable. The original TLS pool URL stays in local configuration; our loopback relay requires a trusted certificate and matching hostname before forwarding any miner payload. KRig connects only to the relay, so a `stratum+tcp://127.0.0.1` child command is local traffic, not a plaintext Internet route.
 - At most 220 W; core / hotspot / memory guards are 80 / 100 / 96 C. Clocks, voltage and fans remain automatic.
 - A named mutex is shared with the source experiment; another GPU application prevents startup or stops our own miner. CPU workloads are allowed, and our processes use BelowNormal priority.
 - Stop and restore the starting board power cap. Preserve an external cap change. An owned child that cannot stop keeps its reduced cap and process reference. Finalization records `stop-failed`, not `stopped`, and raises instead of entering read-only payout waiting.
@@ -17,13 +17,14 @@ These files are a local supervisor in this fork, not a claim that the full upstr
 
 ## Environment
 
-Windows only; Python 3.12.15 in this repository's `.venv`; standard library only. The existing install is `D:\Apps\KRig`, with binary `1.5.12/krig-miner.exe`, `mining-config.json`, and runtime state. `PRL_EXPERIENCE_HOME` can select a different local root for Python checks; the install script intentionally targets the existing local installation. Configuration, logs, wallet keys and executables are not committed.
+Windows only; Python 3.12.15 in this repository's `.venv`; standard library only. The vendored MIT relay retains its source attribution and `TLS-RELAY-LICENSE.txt`. The existing install is `D:\Apps\KRig`, with binary `1.5.12/krig-miner.exe`, `mining-config.json`, and runtime state. `PRL_EXPERIENCE_HOME` can select a different local root for Python checks; the install script intentionally targets the existing local installation. Configuration, logs, wallet keys and executables are not committed.
 
 Run the hardware-free checks (including `-O` so runtime guards cannot depend on assertions):
 
 ```powershell
 .\.venv\Scripts\python.exe Scripts\PearlExperience\test_experience.py
 .\.venv\Scripts\python.exe -O Scripts\PearlExperience\test_experience.py
+.\.venv\Scripts\python.exe Scripts\PearlExperience\test_tls_transport.py
 ```
 
 `Install-Tasks.ps1` is an explicit local deployment, not a miner start. It checks stopped tasks and safety tests, backs up the three task XML definitions and existing launcher to `D:\AI\Playgrounds\RainbowMiner`, points the three bounded mining/calibration tasks at this source, and leaves recovery and the existing desktop panel installed. Inspect the receipt and source before running it. No Defender or global execution-policy changes are made.
@@ -43,3 +44,5 @@ The `LazyPC-PearlTuning` task now uses this same bounded experience with `--cali
 `test_live_gpu_yield.py` and `test_live_manual_stop.py` are explicit live integration checks, not import-time actions or ordinary offline tests. The former requires the separately compiled bounded context helper from the source repository, checks actual native APIs, then simulates an incoming tiny GPU client. Do not run it casually while using your own GPU work. The latter starts a two-minute bounded test through the ordinary Start entry and invokes Stop once hashrate is positive. Evidence lives outside Git.
 
 Ordinary users should use `Manage-Pearl.ps1` or the existing panel. `pearl_controller.py` is a developer building block; the payout experience supplies the cumulative goal and deadline bounds. Session records now include management source-file SHA-256 values so a live run can be tied to its code.
+
+A local negative probe against the pinned KRig 1.5.12 binary found that it accepted an untrusted self-signed certificate and sent application bytes. No jobs were provided. Our supervisor therefore supplies mandatory certificate and hostname verification independently of vendor TLS behavior. TLS receipts and supervisor source hashes are recorded with each session; a failed relay thread ends mining. Native API checks bind the actual miner parent and relay socket to this receipt. The standalone full RainbowMiner adapter still uses vendor TLS and has no claim of an independently verified certificate policy.

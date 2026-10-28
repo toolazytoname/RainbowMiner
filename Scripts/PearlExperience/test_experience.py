@@ -6,7 +6,7 @@ import pathlib
 import tempfile
 import time
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import pearl_controller as pc
 import payout_experience as pe
 from payout_limits import resume_deadline, seconds_left
@@ -149,6 +149,20 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(saved['Status'],'stopped');self.assertFalse(saved['OwnedChildAlive'])
         self.assertIsNone(saved['MinerPid']);self.assertTrue(saved['PowerRestored'])
         c.gpu.power.assert_called_once_with(370)
+    def test_failed_tls_relay_stops_owned_miner_and_restores_cap(self):
+        c=self.controller();c.mode='mine';c.cfg={'pool':'stratum+ssl://prl-hk.kryptex.network:8048','wallet':'public-test','worker':'test'}
+        c.check_stop=Mock();c.guard=Mock()
+        gpu={'PowerLimit':370,'Utilization':0,'MemoryMiB':0,'Temperature':40,'Hotspot':50,'MemoryJunction':50}
+        c.gpu.read.side_effect=lambda:dict(gpu);c.gpu.power.side_effect=lambda watts:gpu.update(PowerLimit=watts)
+        relay=MagicMock();relay.error=None;relay.thread.is_alive.return_value=False;relay.local_port=23456;relay.state={'upstream':'prl-hk.kryptex.network:8048'}
+        child=Mock(pid=123);child.poll.return_value=None
+        with tempfile.TemporaryDirectory() as td:
+            c.run=pathlib.Path(td)
+            with patch.object(pc,'verified_pool_transport',return_value=relay),patch.object(pc.subprocess,'Popen',return_value=child):
+                with self.assertRaisesRegex(pc.EndSession,'verified_tls_relay_unavailable'):c.mine(220,60,'relay-fault')
+        child.terminate.assert_called_once();relay.__exit__.assert_called_once()
+        self.assertIsNone(c.proc);self.assertTrue(c.s['PowerRestored'])
+        self.assertEqual([x.args[0] for x in c.gpu.power.call_args_list],[220,370])
     def test_missing_sensor_and_gpu_conflict_stop(self):
         c=self.controller();c.proc=Mock(pid=123)
         normal={"Temperature":70,"Hotspot":85,"MemoryJunction":80,"PowerLimit":220}

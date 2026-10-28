@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param([string]$ResultPath='')
 $ErrorActionPreference='Stop'
 $root=Split-Path $PSScriptRoot
@@ -143,6 +143,32 @@ Queue beta:
     Assert-True ($r.ProcessId -eq 5678 -and $r.RequestQueue -notmatch '1234') 'Mixed owners from different queues'
     foreach($bad in @($fixture.Replace('18490','184900'),$fixture.Replace('ID: 5678,','ID: 4,'),$fixture.Replace('ID: 5678, image: krig-miner.exe',"ID: 5678, image: krig-miner.exe`n        ID: 9999, image: other.exe"))) {
         $threw=$false;try{KRig\Get-KRigHttpSysHandler -Snapshot $bad -ApiPort 18490|Out-Null}catch{$threw=$true};Assert-True $threw 'Accepted missing or ambiguous HTTP.sys ownership'
+    }
+}
+function New-RelayFixture {
+    [pscustomobject]@{
+        Session=[pscustomobject]@{Status='running';MinerPid=900;ControllerPid=800;VerifiedTlsRelay=[pscustomobject]@{ControllerPid=800;ClientEndpoint='stratum+tcp://127.0.0.1:23456';Upstream='prl-hk.kryptex.network:8048';CertificateRequired=$true;HostnameRequired=$true}}
+        Receipt=[pscustomobject]@{status='running';upstream='prl-hk.kryptex.network:8048';bind='127.0.0.1';local_port=23456;certificate_required=$true;hostname_check_required=$true;verified_sessions=1;tls_version='TLSv1.3';cipher='TLS_AES_256_GCM_SHA384'}
+    }
+}
+Test-Case 'Supervisor TLS evidence binds miner parent, loopback socket and verified pool' {
+    $f=New-RelayFixture;$proof=KRig\Get-KRigSupervisorTlsEvidence -Session $f.Session -Receipt $f.Receipt -MinerPid 900 -ParentPid 800 -LocalPort 23456 -SocketOwnerPid 800
+    Assert-True ($proof.Verified -and $proof.Upstream -ceq 'prl-hk.kryptex.network:8048') 'Valid ownership chain rejected'
+}
+Test-Case 'Supervisor TLS evidence rejects unrelated processes and ports' {
+    foreach($case in @('miner','parent','socket','port')){
+        $f=New-RelayFixture;$pidArgs=@{MinerPid=900;ParentPid=800;LocalPort=23456;SocketOwnerPid=800}
+        switch($case){'miner'{$pidArgs.MinerPid=999};'parent'{$pidArgs.ParentPid=999};'socket'{$pidArgs.SocketOwnerPid=999};'port'{$pidArgs.LocalPort=23457}}
+        $threw=$false;try{KRig\Get-KRigSupervisorTlsEvidence -Session $f.Session -Receipt $f.Receipt @pidArgs|Out-Null}catch{$threw=$true}
+        Assert-True $threw ('Accepted unrelated '+$case)
+    }
+}
+Test-Case 'Supervisor TLS evidence rejects unverified, stopped and foreign-pool claims' {
+    foreach($case in @('flag','string-flag','sessions','version','stopped','foreign','endpoint')){
+        $f=New-RelayFixture
+        switch($case){'flag'{$f.Receipt.hostname_check_required=$false};'string-flag'{$f.Receipt.certificate_required='True'};'sessions'{$f.Receipt.verified_sessions=0};'version'{$f.Receipt.tls_version='TLSv1'};'stopped'{$f.Receipt.status='stopped'};'foreign'{$f.Receipt.upstream='foreign.example:8048'};'endpoint'{$f.Session.VerifiedTlsRelay.ClientEndpoint='stratum+tcp://0.0.0.0:23456'}}
+        $threw=$false;try{KRig\Get-KRigSupervisorTlsEvidence -Session $f.Session -Receipt $f.Receipt -MinerPid 900 -ParentPid 800 -LocalPort 23456 -SocketOwnerPid 800|Out-Null}catch{$threw=$true}
+        Assert-True $threw ('Accepted invalid '+$case)
     }
 }
 $failed=@($checks|Where-Object {-not $_.Passed})
