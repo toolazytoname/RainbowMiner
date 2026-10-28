@@ -100,6 +100,30 @@ class Miner {
     $api=New-Object -TypeName KRig;$api.Name='fixture';$api.Port=37400;$api.Algorithm=@('PearlHash');$api.UpdateMinerData()
     Assert-True ($api.LastRates.PearlHash -eq 59000000000000 -and $api.LastShares[0] -eq 11 -and $api.LastShares[1] -eq 2 -and $api.LastShares[2] -eq 1 -and $api.Cleanups -eq 1) 'Actual API class did not update counters'
 }
+Test-Case 'Real algorithm database and pool-key helper produce the KRig launch specification' {
+    $db=Get-Content (Join-Path $root 'Data/algorithms.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $map=@{};foreach($property in $db.PSObject.Properties){$map[$property.Name]=$property.Value}
+    $Session=@{GlobalAlgorithms=$map}
+    foreach($item in @(@('Modules/Include.psm1','Get-Algorithm'),@('Modules/MinersLib.psm1','Get-PoolAlgorithmKeys'))) {
+        $tokens=$null;$errors=$null
+        $ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $root $item[0]),[ref]$tokens,[ref]$errors)
+        $wanted=$item[1]
+        $node=$ast.Find({param($n)$n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $wanted},$true)
+        Assert-True ($null -ne $node) 'Actual mapping helper is missing'
+        Invoke-Expression $node.Extent.Text
+    }
+    Assert-True ((Get-Algorithm 'pearlhash') -ceq 'PearlHash') 'Actual algorithm database maps Pearl incorrectly'
+    $Global:DeviceCache=[pscustomobject]@{DevicesByTypes=[pscustomobject]@{NVIDIA=@([pscustomobject]@{Type='GPU';Model='RTX3090';Name='GPU#00';Index=0;BusId='01:00'})}}
+    $Global:StatsCache=[pscustomobject]@{}
+    if($PSVersionTable.PSVersion.Major -lt 6){$script:IsWindows=$true}
+    $pools=[pscustomobject]@{PearlHash=[pscustomobject]@{Host='prl-hk.kryptex.network';Port=8048;SSL=$true;Wallet=$wallet;Worker='Lazy3090';Pass='x'}}
+    $keys=@(Get-PoolAlgorithmKeys -Pools $pools -Algorithm (Get-Algorithm pearlhash) -Model RTX3090)
+    Assert-True ($keys -contains 'PearlHash' -and $keys -contains 'PearlHash-GPU') 'Actual pool key enumeration is incompatible'
+    $text=Get-Content (Join-Path $root 'Miners/KRig.ps1') -Raw -Encoding UTF8
+    $block=[scriptblock]::Create((($text -replace '^using module[^\r\n]+[\r\n]+','') -replace '(?m)^Import-Module[^\r\n]+[\r\n]+',''))
+    $items=@(& $block -Name KRig -Pools $pools -InfoOnly $false)
+    Assert-True ($items.Count -eq 1 -and $items[0].API -eq 'KRig' -and $items[0].HashRates.PSObject.Properties.Name -contains 'PearlHash') 'Definition is incompatible with actual algorithm/pool mapping'
+}
 $failed=@($checks|Where-Object {-not $_.Passed})
 $result=[pscustomobject]@{Time=[datetime]::UtcNow.ToString('o');PowerShell=$PSVersionTable.PSVersion.ToString();Passed=$checks.Count-$failed.Count;Failed=$failed.Count;Checks=@($checks.ToArray());GPUWorkStarted=$false;PoolCalls=0;MinerStarted=$false}
 if($ResultPath){$result|ConvertTo-Json -Depth 7|Set-Content -LiteralPath $ResultPath -Encoding UTF8}

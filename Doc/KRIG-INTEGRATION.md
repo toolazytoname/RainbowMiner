@@ -18,6 +18,9 @@ $env:KRIG_MINER_PATH='D:\Apps\KRig\1.5.12\krig-miner.exe'
 # New fork configurations start paused; do not start competing miners.
 ```
 
-`Tests/Test-KRig.ps1` has **14 passing offline checks on each of PS7 and Windows PowerShell 5.1**, including execution of the real miner definition and API class with local stand-ins. No GPU, miner or pool is contacted by these tests. **The complete RainbowMiner GUI/download/mining flow and actual KRig API have not yet been validated for this adapter.**
+`Tests/Test-KRig.ps1` has **15 passing offline checks on each of PS7 and Windows PowerShell 5.1**, including execution of the real miner definition and API class with local stand-ins, plus the actual algorithm database and pool-key helper bodies. No GPU, miner or pool is contacted by these tests. **The complete RainbowMiner GUI/download/mining flow and actual KRig API have not yet been validated for this adapter.**
 
 KRig is a separate upstream binary: this repository does not contain its GPU kernel source. Actual open-kernel development is in [toolazytoname/soat-miner](https://github.com/toolazytoname/soat-miner). Fees are separate: KRig's Kryptex developer-fee policy, the pool fee and this fork's disclosed optional support time must not be confused with one another. This adapter does not change them.
+
+
+A read-only real-API check is available as `Tests/Test-KRigLive.ps1 -ApiPort 18490 -EvidenceDirectory <Windows experiment directory>`. It requires the separately authorized guarded KRig process to be running already; the checker never starts a miner. It verifies the actual listener owner/path/hash and loopback binding, then executes the exact native KRig API class against actual HTTP responses. Its larger manager base remains a stand-in, so success must not be represented as validation of the complete web UI or manager startup flow. This live check is still pending at this checkpoint while the source comparison owns the GPU.
