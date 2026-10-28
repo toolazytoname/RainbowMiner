@@ -6,6 +6,7 @@ thermal protection, miner exit, or normal Python exception. Driver clocks/fans s
 import contextlib,argparse,ctypes,datetime,hashlib,json,math,os,pathlib,statistics,subprocess,sys,time,urllib.request
 from gpu_driver import Gpu
 from pool_transport import verified_pool_transport
+from compute_backend import select_compute_backend,read_source_stats,BackendStatsError
 from gpu_clients import gpu_processes,DESKTOP_PROCESSES
 SOURCE=pathlib.Path(__file__).parent;ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';EXE=ROOT/'1.5.12/krig-miner.exe'
 PY=pathlib.Path(sys.executable);STOP=RT/'stop.request';CANCEL=RT/'cancel.request'
@@ -43,22 +44,31 @@ class GuardStop(Exception):pass
 class Controller:
  def __init__(self,mode,resume_file=None):
   self.resume=pathlib.Path(resume_file) if resume_file else None
-  self.cfg=load(ROOT/'mining-config.json');self.mode=mode;self.gpu=Gpu();self.proc=None;self.changed=False;self.mutex=None
+  self.cfg=load(ROOT/'mining-config.json');self.backend=select_compute_backend(self.cfg,ROOT);self.mode=mode;self.gpu=Gpu();self.proc=None;self.changed=False;self.mutex=None
   self.original=self.gpu.read()['PowerLimit'];self.s={};self.run=None;self.samples=[];self.last_api={}
  def save(self):write(RT/'session.json',self.s)
  def check_stop(self):
   if STOP.exists() or CANCEL.exists():raise EndSession('user_stop')
  def api(self):
+  if self.backend.kind=='soat':
+   try:
+    value=read_source_stats(self.backend_log)
+    if value:self.last_api=value
+    return self.last_api
+   except BackendStatsError as exc:raise GuardStop(str(exc))
   try:
    with OPENER.open('http://127.0.0.1:18490/',timeout=1) as r:d=json.load(r)
    a=d['devices'][0]['algorithms'][0]
-   self.last_api={'HashrateTHs':a['hashrate']/1e12,'AcceptedShares':a['shares']['accepted'],'RejectedShares':a['shares']['rejected'],'StaleShares':a['shares']['stale']}
+   self.last_api={'ReportedRate':a['hashrate']/1e12,'ReportedRateUnit':'TH/s','HashrateTHs':a['hashrate']/1e12,'AcceptedShares':a['shares']['accepted'],'RejectedShares':a['shares']['rejected'],'StaleShares':a['shares']['stale']}
   except Exception:pass
   return self.last_api
  def telemetry(self,stage):
   self.check_stop();g=self.gpu.read();row={'Time':now(),'Epoch':time.time(),'Stage':stage,'Gpu':g,**(self.api() if self.proc else {})}
   with (self.run/'telemetry.ndjson').open('a',encoding='utf-8') as out:out.write(json.dumps(row,ensure_ascii=False)+'\n')
-  self.s.update({'LastTelemetry':g,'HashrateTHs':round(row.get('HashrateTHs',0),2),'AcceptedShares':row.get('AcceptedShares',0),'RejectedShares':row.get('RejectedShares',0),'StaleShares':row.get('StaleShares',0),'LastUpdate':row['Time']});self.save()
+  self.s.update({'LastTelemetry':g,'ReportedRate':round(row.get('ReportedRate',0),2),'ReportedRateUnit':self.backend.rate_unit,'AcceptedShares':row.get('AcceptedShares',0),'RejectedShares':row.get('RejectedShares',0),'StaleShares':row.get('StaleShares',0),'LastUpdate':row['Time'],'BackendUptimeSeconds':row.get('BackendUptimeSeconds')})
+  if self.backend.kind=='krig':self.s['HashrateTHs']=self.s['ReportedRate']
+  else:self.s.pop('HashrateTHs',None)
+  self.save()
   return row
  def guard(self,row,watts):
   g=row['Gpu']
@@ -95,7 +105,7 @@ class Controller:
   else:write(RT/'last-start-error.json',{'Time':now(),'Reason':reason})
   if alive:raise RuntimeError('Owned miner is still alive; retaining reduced cap and refusing a stopped status')
  def cooldown(self,label):
-  self.s.update(Status='cooling',Phase=label,HashrateTHs=0,MiningPowerWatts=0,CooldownReason='至少3分钟；核心≤50℃、热点≤65℃、显存≤65℃，最后1分钟温度波动≤2℃');self.save()
+  self.s.update(Status='cooling',Phase=label,ReportedRate=0,ReportedRateUnit=self.backend.rate_unit,MiningPowerWatts=0,CooldownReason='至少3分钟；核心≤50℃、热点≤65℃、显存≤65℃，最后1分钟温度波动≤2℃');self.save()
   start=time.monotonic();rows=[]
   while time.monotonic()-start<900:
    row=self.telemetry('cooldown');rows.append(row);tail=[x for x in rows if row['Epoch']-x['Epoch']<=60]
@@ -118,20 +128,21 @@ class Controller:
   if g['Utilization']>15 or g['MemoryMiB']>2500:raise EndSession('other_gpu_workload_before_start')
   self.guard({'Gpu':g},g['PowerLimit'])
   self.samples=[];self.last_api={};start=time.monotonic();reason='time_limit';sub=self.run/label;sub.mkdir(exist_ok=True)
-  self.s.update(Status='calibrating' if extend else 'running',Phase=label,MiningPowerWatts=watts,PowerRestored=False,HashrateTHs=0,AcceptedShares=0,RejectedShares=0,PlannedStop=(datetime.datetime.now().astimezone()+datetime.timedelta(seconds=seconds+(360 if extend else 0))).isoformat())
+  self.s.update(Status='calibrating' if extend else 'running',Phase=label,MiningPowerWatts=watts,PowerRestored=False,ReportedRate=0,ReportedRateUnit=self.backend.rate_unit,AcceptedShares=0,RejectedShares=0,PlannedStop=(datetime.datetime.now().astimezone()+datetime.timedelta(seconds=seconds+(360 if extend else 0))).isoformat())
   self.save();self.changed=True;self.gpu.power(watts)
   log=(sub/'miner.log').open('wb');err=(sub/'miner-error.log').open('wb');relay=None
   try:
    relay=verified_pool_transport(self.cfg['pool'],sub/'tls-status.json');relay.__enter__()
    endpoint='stratum+tcp://127.0.0.1:'+str(relay.local_port)
    self.s['VerifiedTlsRelay']={'Upstream':relay.state['upstream'],'ClientEndpoint':endpoint,'Receipt':str(sub/'tls-status.json'),'ControllerPid':os.getpid(),'CertificateRequired':True,'HostnameRequired':True};self.save()
-   args=[str(EXE),'--coin','pearl','--url',endpoint,'--user',self.cfg['wallet']+'/'+self.cfg['worker'],'--devices-pci','01:00.0','--no-rocm','--no-intel','--api-host','127.0.0.1','--api-port','18490','--no-tui','--log-level','info']
-   self.proc=subprocess.Popen(args,cwd=EXE.parent,stdout=log,stderr=err,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
+   args=self.backend.command(endpoint,self.cfg);self.backend_log=sub/'miner.log'
+   self.proc=subprocess.Popen(args,cwd=self.backend.executable.parent,env=self.backend.environment(),stdout=log,stderr=err,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
    self.s['MinerPid']=self.proc.pid;self.save()
    while True:
     if relay.error or not relay.thread.is_alive():raise GuardStop('verified_tls_relay_unavailable')
     if self.proc.poll() is not None:raise GuardStop('miner_exited')
     row=self.telemetry(label);self.samples.append(row);self.guard(row,watts)
+    if self.backend.kind=='soat' and time.monotonic()-start>90 and not self.last_api:raise GuardStop('source_telemetry_unavailable')
     elapsed=time.monotonic()-start
     if elapsed>=seconds:
      if not extend or self.steady(self.samples) or elapsed>=seconds+360:break
@@ -144,19 +155,19 @@ class Controller:
      if relay:relay.__exit__()
     finally:log.close();err.close()
   end=self.samples[-1]['Epoch'] if self.samples else 0
-  tail=[r for r in self.samples if end-r['Epoch']<=180 and r.get('HashrateTHs',0)>0]
+  tail=[r for r in self.samples if end-r['Epoch']<=180 and r.get('ReportedRate',r.get('HashrateTHs',0))>0]
   if not tail:raise EndSession(reason if reason!='time_limit' else 'No valid mining hashrate samples')
   mean=lambda key:round(statistics.mean(r['Gpu'][key] for r in tail),2)
-  rate=round(statistics.mean(r['HashrateTHs'] for r in tail),2);power=mean('Power')
-  result={'PowerLimitWatts':watts,'Seconds':round(time.monotonic()-start),'StopReason':reason,'Steady':self.steady(self.samples),'AverageHashrateTHs':rate,'AverageGpuWatts':power,'THsPerWatt':round(rate/power,5),'CoreAverage':mean('Temperature'),'CoreMaximum':max(r['Gpu']['Temperature'] for r in self.samples),'CoreSteadyMaximum':max(r['Gpu']['Temperature'] for r in tail),'HotspotAverage':mean('Hotspot'),'HotspotMaximum':max(r['Gpu']['Hotspot'] for r in self.samples),'MemoryJunctionAverage':mean('MemoryJunction'),'MemoryJunctionMaximum':max(r['Gpu']['MemoryJunction'] for r in self.samples),'FanPercentAverage':mean('FanPercent'),'AcceptedShares':self.samples[-1].get('AcceptedShares',0),'RejectedShares':self.samples[-1].get('RejectedShares',0),'Samples':len(self.samples),'StableWindowSeconds':180,'RunDirectory':str(sub)}
+  rate=round(statistics.mean(r['ReportedRate'] for r in tail),2);power=mean('Power')
+  result={'PowerLimitWatts':watts,'Seconds':round(time.monotonic()-start),'StopReason':reason,'Steady':self.steady(self.samples),'BackendKind':self.backend.kind,'ReportedRateUnit':self.backend.rate_unit,'AverageReportedRate':rate,'AverageGpuWatts':power,'ReportedRatePerWatt':round(rate/power,5),'CoreAverage':mean('Temperature'),'CoreMaximum':max(r['Gpu']['Temperature'] for r in self.samples),'CoreSteadyMaximum':max(r['Gpu']['Temperature'] for r in tail),'HotspotAverage':mean('Hotspot'),'HotspotMaximum':max(r['Gpu']['Hotspot'] for r in self.samples),'MemoryJunctionAverage':mean('MemoryJunction'),'MemoryJunctionMaximum':max(r['Gpu']['MemoryJunction'] for r in self.samples),'FanPercentAverage':mean('FanPercent'),'AcceptedShares':self.samples[-1].get('AcceptedShares',0),'RejectedShares':self.samples[-1].get('RejectedShares',0),'Samples':len(self.samples),'StableWindowSeconds':180,'RunDirectory':str(sub)}
+  if self.backend.kind=='krig':result.update(AverageHashrateTHs=rate,THsPerWatt=round(rate/power,5))
   write(sub/'result.json',result);return result
  def execute(self):
   with mining_mutex():return self._execute_locked()
  def _execute_locked(self):
   reason='completed'
   try:
-   require(EXE.exists(),'Miner is missing; Windows protection is not bypassed')
-   with EXE.open('rb') as binary:require(hashlib.file_digest(binary,'sha256').hexdigest()==self.cfg['exe_sha256'],'Miner hash changed')
+   self.backend.verify_binary()
    for p in [STOP,CANCEL]:p.unlink(missing_ok=True)
    g=self.gpu.read();self.original=g['PowerLimit']
    if g['Utilization']>15 or g['MemoryMiB']>2500:raise RuntimeError('GPU is busy; refusing to interrupt another workload')
@@ -164,19 +175,20 @@ class Controller:
    completed=[]
    if self.resume:
     require(self.mode=='calibrate' and self.resume.name=='calibration-progress.json','Invalid resume file')
-    require(self.resume.parent.parent.resolve()==pathlib.Path('D:/AI/Playgrounds/KRig').resolve(),'Resume path is outside our run directory')
-    record=load(self.resume);require(record.get('Status')=='running','Calibration is already complete')
+    require(self.resume.parent.parent.resolve()==(pathlib.Path('D:/AI/Playgrounds')/('RainbowMiner' if self.backend.kind=='soat' else 'KRig')).resolve(),'Resume path is outside our run directory')
+    record=load(self.resume);require(record.get('BackendKind','krig')==self.backend.kind,'Cannot mix compute backends in a calibration resume');require(record.get('Status')=='running','Calibration is already complete')
     completed=record['Results'];require(completed and [r['PowerLimitWatts'] for r in completed] in [[180],[180,200]],'Unexpected completed profiles')
     require(all(r['StopReason']=='time_limit' and r['Steady'] for r in completed),'Cannot resume above a failed profile')
     self.run=self.resume.parent;previous=load(RT/'session.json')
     require(previous['Status']=='stopped' and pathlib.Path(previous['RunDirectory']).resolve()==self.run.resolve(),'Previous session is not stopped')
     write(self.run/('previous-controller-'+str(previous['ControllerPid'])+'.json'),previous)
    else:
-    self.run=pathlib.Path('D:/AI/Playgrounds/KRig')/(datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+self.mode);self.run.mkdir(parents=True)
+    self.run=pathlib.Path('D:/AI/Playgrounds')/('RainbowMiner' if self.backend.kind=='soat' else 'KRig')/(datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+self.backend.kind+'-'+self.mode);self.run.mkdir(parents=True)
    self.s={'SessionId':self.run.name,'Status':'starting','Mode':self.mode,'ControllerPid':os.getpid(),'MinerPid':None,'StartTime':now(),'OriginalPowerWatts':self.original,'MiningPowerWatts':0,'PowerRestored':False,'RunDirectory':str(self.run),'Wallet':self.cfg['wallet'],'Worker':self.cfg['worker'],'Pool':self.cfg['pool'],'LastTelemetry':g,'StopReason':None,'ThermalGuards':{'Core':80,'Hotspot':100,'MemoryJunction':96},'ClocksAndFans':'driver automatic; unchanged','SecuritySettingsChanged':False}
+   self.s['ComputeBackend']=self.backend.receipt();self.s['ReportedRate']=0;self.s['ReportedRateUnit']=self.backend.rate_unit
    self.s['ManagementSourceDirectory']=str(SOURCE)
    self.s['ManagementSourceSha256']={}
-   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py','pool_transport.py','tls_relay.py']:
+   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py','pool_transport.py','tls_relay.py','compute_backend.py']:
     with (SOURCE/filename).open('rb') as code:self.s['ManagementSourceSha256'][filename]=hashlib.file_digest(code,'sha256').hexdigest()
    self.save()
    subprocess.Popen([str(PY),str(SOURCE/'coexist_monitor.py')],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
@@ -186,15 +198,15 @@ class Controller:
      if any(r['PowerLimitWatts']==watts for r in completed):continue
      baseline=self.cooldown('准备'+str(watts)+'W')
      r=self.mine(watts,720,'profile-'+str(watts)+'W',extend=True);r['Cooldown']=baseline;results.append(r)
-     write(self.run/'calibration-progress.json',{'Status':'running','Results':results})
+     write(self.run/'calibration-progress.json',{'Status':'running','BackendKind':self.backend.kind,'ReportedRateUnit':self.backend.rate_unit,'Results':results})
      if r['StopReason']!='time_limit':raise EndSession(r['StopReason'])
     eligible=[r for r in results if r['Steady'] and r['StopReason']=='time_limit' and r['CoreSteadyMaximum']<=78 and r['HotspotMaximum']<=95 and r['MemoryJunctionMaximum']<=90 and r['AcceptedShares']>0 and r['RejectedShares']==0]
     if not eligible:raise EndSession('No tested profile passed comfort criteria')
-    best=max(r['THsPerWatt'] for r in eligible);choice=max((r for r in eligible if r['THsPerWatt']>=best*.95),key=lambda r:r['AverageHashrateTHs'])
+    best=max(r.get('ReportedRatePerWatt',r.get('THsPerWatt',0)) for r in eligible);choice=max((r for r in eligible if r.get('ReportedRatePerWatt',r.get('THsPerWatt',0))>=best*.95),key=lambda r:r.get('AverageReportedRate',r.get('AverageHashrateTHs',0)))
     self.cfg['power_watts']=choice['PowerLimitWatts'];write(ROOT/'mining-config.json',self.cfg)
     result={'Status':'complete','Time':now(),'Results':results,'Selected':choice,'SelectionRule':'核心≤78℃，热点≤95℃，显存≤90℃，稳态且份额被接受；在最佳GPU能效95%以内选较快档位','LongRunMinutes':self.cfg.get('default_minutes',480),'OriginalPowerWatts':self.original,'Scope':'Only board power varied. Same miner, auto clocks/fans. GPU power only; whole-PC wall power not measured.'}
     write(self.run/'calibration-result.json',result);write(RT/'calibration-result.json',result)
-    write(self.run/'calibration-progress.json',{'Status':'complete','Results':results})
+    write(self.run/'calibration-progress.json',{'Status':'complete','BackendKind':self.backend.kind,'ReportedRateUnit':self.backend.rate_unit,'Results':results})
     self.cooldown('开始选定档位前冷却')
    else:
     g=self.gpu.read()

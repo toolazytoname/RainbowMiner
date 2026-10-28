@@ -116,7 +116,7 @@ class PayoutWaitTests(unittest.TestCase):
 
 class CleanupTests(unittest.TestCase):
     def controller(self,power=220):
-        c=object.__new__(pc.Controller);c.s={"MiningPowerWatts":220,"MinerPid":123};c.proc=None;c.changed=True;c.original=370;c.gpu=Mock();c.save=Mock()
+        c=object.__new__(pc.Controller);c.s={"MiningPowerWatts":220,"MinerPid":123};c.proc=None;c.changed=True;c.original=370;c.gpu=Mock();c.save=Mock();c.backend=pc.select_compute_backend({"backend":"krig","allow_krig_relay_fee":True,"exe_sha256":"0"*64},pc.ROOT)
         state={"PowerLimit":power}
         c.gpu.read.side_effect=lambda:dict(state)
         c.gpu.power.side_effect=lambda watts:state.update(PowerLimit=watts)
