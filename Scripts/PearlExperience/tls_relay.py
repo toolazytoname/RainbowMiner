@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: MIT
 # Vendored from toolazytoname/soat-miner (xiaotutou-prl3090), tools/tls_relay.py.
-# Original source SHA-256: d9de8b4561f1309c79cba17d07b2ba2df98480d5873da6260dbe33fa956a6065
-# See TLS-RELAY-LICENSE.txt. No upstream payload logging or verification policy changes.
+# Original source SHA-256: 68eba079c6cfd7be9affe1854601ff7d5565d18f132a541ef21a47d4f60d4147
+# See TLS-RELAY-LICENSE.txt. No payload logging or certificate/hostname verification changes.
 """Loopback-only TCP-to-verified-TLS relay for the upstream Pearl client.
 
 No application payloads, wallets or proofs are logged. Certificate verification
 and hostname checking are mandatory. The default trust roots are the Windows
 Python/OpenSSL system roots; no insecure or plaintext upstream fallback exists.
+The idle deadline measures inactivity across both directions of a connection;
+an active upstream need not wait for a client share to keep the stream open.
 """
 import asyncio
 from datetime import datetime, timezone
@@ -35,7 +37,8 @@ class TlsRelay:
         self.state = dict(status='preparing', upstream=f'{host}:{port}', bind='127.0.0.1',
                           certificate_required=True, hostname_check_required=True,
                           sessions=0, active_sessions=0, verified_sessions=0,
-                          failed_sessions=0, client_bytes=0, upstream_bytes=0)
+                          failed_sessions=0, client_bytes=0, upstream_bytes=0,
+                          connection_idle_timeouts=0)
 
     def _save(self):
         if self.receipt:
@@ -62,11 +65,24 @@ class TlsRelay:
             self.state.update(verified_sessions=self.state['verified_sessions']+1,
                               tls_version=secure.version(), cipher=secure.cipher()[0])
             self._save()
+            clock = asyncio.get_running_loop()
+            activity = dict(last=clock.time(), expired=False)
             async def copy(source, destination, field):
                 while True:
-                    data = await asyncio.wait_for(source.read(65536), self.idle_seconds)
+                    remaining = self.idle_seconds - (clock.time() - activity['last'])
+                    if remaining <= 0:
+                        if not activity['expired']:
+                            self.state['connection_idle_timeouts'] += 1
+                            activity['expired'] = True
+                        raise TimeoutError('No traffic in either direction before the connection idle limit')
+                    try:
+                        data = await asyncio.wait_for(source.read(65536), remaining)
+                    except asyncio.TimeoutError:
+                        # The other direction may have moved this shared deadline.
+                        continue
                     if not data:
                         return
+                    activity['last'] = clock.time()
                     destination.write(data)
                     await destination.drain()
                     self.state[field] += len(data)

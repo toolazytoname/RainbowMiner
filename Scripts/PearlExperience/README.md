@@ -69,3 +69,5 @@ proof encoding are unchanged by this host-side statistics correction.
 ## One-case backend comparison
 
 The experimental run_backend_comparison_case.py entry selects SOAT or KRig in memory for one bounded 1..15 minute case under the existing payout, original deadline, TLS, ownership, temperature and coexistence guards. It never writes the production mining configuration. KRig on the authenticated localhost relay requires --accept-krig-relay-fee-percent 3; the source route rejects that fee option. Use a new absolute --receipt path and an operator-started elevated interactive task. There is no retry or scheduled boot trigger. The default desktop Start entry continues to use the production configuration.
+
+The authenticated relay idle deadline is shared across both traffic directions. A miner does not need to find a share just to keep an active upstream connection open. A completely silent connection still times out. The status receipt preserves a connection_idle_timeouts counter; payloads are not logged.
