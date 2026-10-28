@@ -26,7 +26,7 @@ Run the hardware-free checks (including `-O` so runtime guards cannot depend on 
 .\.venv\Scripts\python.exe -O Scripts\PearlExperience\test_experience.py
 ```
 
-`Install-Tasks.ps1` is an explicit local deployment, not a miner start. It checks stopped tasks and safety tests, backs up the two task XML definitions and existing launcher to `D:\AI\Playgrounds\RainbowMiner`, points the two bounded mining tasks at this source, and leaves recovery and the existing desktop panel installed. Inspect the receipt and source before running it. No Defender or global execution-policy changes are made.
+`Install-Tasks.ps1` is an explicit local deployment, not a miner start. It checks stopped tasks and safety tests, backs up the three task XML definitions and existing launcher to `D:\AI\Playgrounds\RainbowMiner`, points the three bounded mining/calibration tasks at this source, and leaves recovery and the existing desktop panel installed. Inspect the receipt and source before running it. No Defender or global execution-policy changes are made.
 
 ```powershell
 .\Scripts\PearlExperience\Install-Tasks.ps1
@@ -36,3 +36,10 @@ Run the hardware-free checks (including `-O` so runtime guards cannot depend on 
 ```
 
 A previous one-shot experience state is deliberately required by the entry script. This installation preserves an existing authorized experiment; it does not silently create a fresh unlimited mining budget. Runtime records are under `D:\Apps\KRig\Runtime`, mining evidence under `D:\AI\Playgrounds\KRig`.
+
+
+The `LazyPC-PearlTuning` task now uses this same bounded experience with `--calibrate`. Its public-pool watcher remains active across the calibration profiles and intervening cooldowns. Thermal/resource failure aborts the calibration instead of choosing an earlier profile and resuming automatically. Cooldown also yields to a newly present GPU application. The original deadline and first payout threshold apply throughout; no new heavy calibration is launched by deployment.
+
+`test_live_gpu_yield.py` and `test_live_manual_stop.py` are explicit live integration checks, not import-time actions or ordinary offline tests. The former requires the separately compiled bounded context helper from the source repository, checks actual native APIs, then simulates an incoming tiny GPU client. Do not run it casually while using your own GPU work. The latter starts a two-minute bounded test through the ordinary Start entry and invokes Stop once hashrate is positive. Evidence lives outside Git.
+
+Ordinary users should use `Manage-Pearl.ps1` or the existing panel. `pearl_controller.py` is a developer building block; the payout experience supplies the cumulative goal and deadline bounds. Session records now include management source-file SHA-256 values so a live run can be tied to its code.

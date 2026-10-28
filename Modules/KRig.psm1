@@ -56,4 +56,16 @@ function Get-KRigApiSummary {
     # API hashrate is already in base units. Do not multiply a TH/s display twice.
     [PSCustomObject]@{Hashrate=$rate;Accepted=$accepted;Rejected=$rejected;Stale=$stale;PowerDraw=0.0}
 }
-Export-ModuleMember -Function Get-KRigArguments,Get-KRigApiSummary
+function Get-KRigHttpSysHandler {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Snapshot,[ValidateRange(1024,65535)][int]$ApiPort)
+    # Localized labels may vary; queue boundaries, ASCII URL and ID fields do not.
+    $blocks=[regex]::Split($Snapshot,'(?m)(?=^\S[^\r\n]*:)')
+    $urlPattern='(?i)HTTP://127\.0\.0\.1:'+ $ApiPort +'(?::127\.0\.0\.1)?/'
+    $queueMatches=@($blocks|Where-Object {$_ -match $urlPattern})
+    if($queueMatches.Count -ne 1){throw 'Cannot identify one exact loopback HTTP.sys queue'}
+    $handlerIds=@([regex]::Matches($queueMatches[0],'(?m)^\s+ID:\s*(\d+),')|ForEach-Object {[int]$_.Groups[1].Value})
+    if($handlerIds.Count -ne 1 -or $handlerIds[0] -le 4){throw 'Expected one user-mode HTTP.sys queue handler'}
+    [PSCustomObject]@{ProcessId=$handlerIds[0];RequestQueue=$queueMatches[0];ApiPort=$ApiPort}
+}
+Export-ModuleMember -Function Get-KRigArguments,Get-KRigApiSummary,Get-KRigHttpSysHandler

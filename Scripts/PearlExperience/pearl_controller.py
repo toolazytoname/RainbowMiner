@@ -90,6 +90,7 @@ class Controller:
   start=time.monotonic();rows=[]
   while time.monotonic()-start<900:
    row=self.telemetry('cooldown');rows.append(row);tail=[x for x in rows if row['Epoch']-x['Epoch']<=60]
+   if any(pid!=os.getpid() and name not in DESKTOP_PROCESSES for pid,name in gpu_processes().items()):raise EndSession('other_gpu_workload_during_cooldown')
    g=row['Gpu'];ready=g['Temperature']<=50 and g['Hotspot']<=65 and g['MemoryJunction']<=65
    stable=len(tail)>=10 and max(x['Gpu']['Temperature'] for x in tail)-min(x['Gpu']['Temperature'] for x in tail)<=2 and max(x['Gpu']['MemoryJunction'] for x in tail)-min(x['Gpu']['MemoryJunction'] for x in tail)<=2
    if time.monotonic()-start>=180 and ready and stable:
@@ -127,7 +128,7 @@ class Controller:
    self.stop_miner();log.close();err.close()
   end=self.samples[-1]['Epoch'] if self.samples else 0
   tail=[r for r in self.samples if end-r['Epoch']<=180 and r.get('HashrateTHs',0)>0]
-  if not tail:raise EndSession('No valid mining hashrate samples')
+  if not tail:raise EndSession(reason if reason!='time_limit' else 'No valid mining hashrate samples')
   mean=lambda key:round(statistics.mean(r['Gpu'][key] for r in tail),2)
   rate=round(statistics.mean(r['HashrateTHs'] for r in tail),2);power=mean('Power')
   result={'PowerLimitWatts':watts,'Seconds':round(time.monotonic()-start),'StopReason':reason,'Steady':self.steady(self.samples),'AverageHashrateTHs':rate,'AverageGpuWatts':power,'THsPerWatt':round(rate/power,5),'CoreAverage':mean('Temperature'),'CoreMaximum':max(r['Gpu']['Temperature'] for r in self.samples),'CoreSteadyMaximum':max(r['Gpu']['Temperature'] for r in tail),'HotspotAverage':mean('Hotspot'),'HotspotMaximum':max(r['Gpu']['Hotspot'] for r in self.samples),'MemoryJunctionAverage':mean('MemoryJunction'),'MemoryJunctionMaximum':max(r['Gpu']['MemoryJunction'] for r in self.samples),'FanPercentAverage':mean('FanPercent'),'AcceptedShares':self.samples[-1].get('AcceptedShares',0),'RejectedShares':self.samples[-1].get('RejectedShares',0),'Samples':len(self.samples),'StableWindowSeconds':180,'RunDirectory':str(sub)}
@@ -155,7 +156,12 @@ class Controller:
     write(self.run/('previous-controller-'+str(previous['ControllerPid'])+'.json'),previous)
    else:
     self.run=pathlib.Path('D:/AI/Playgrounds/KRig')/(datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+self.mode);self.run.mkdir(parents=True)
-   self.s={'SessionId':self.run.name,'Status':'starting','Mode':self.mode,'ControllerPid':os.getpid(),'MinerPid':None,'StartTime':now(),'OriginalPowerWatts':self.original,'MiningPowerWatts':0,'PowerRestored':False,'RunDirectory':str(self.run),'Wallet':self.cfg['wallet'],'Worker':self.cfg['worker'],'Pool':self.cfg['pool'],'LastTelemetry':g,'StopReason':None,'ThermalGuards':{'Core':80,'Hotspot':100,'MemoryJunction':96},'ClocksAndFans':'driver automatic; unchanged','SecuritySettingsChanged':False};self.save()
+   self.s={'SessionId':self.run.name,'Status':'starting','Mode':self.mode,'ControllerPid':os.getpid(),'MinerPid':None,'StartTime':now(),'OriginalPowerWatts':self.original,'MiningPowerWatts':0,'PowerRestored':False,'RunDirectory':str(self.run),'Wallet':self.cfg['wallet'],'Worker':self.cfg['worker'],'Pool':self.cfg['pool'],'LastTelemetry':g,'StopReason':None,'ThermalGuards':{'Core':80,'Hotspot':100,'MemoryJunction':96},'ClocksAndFans':'driver automatic; unchanged','SecuritySettingsChanged':False}
+   self.s['ManagementSourceDirectory']=str(SOURCE)
+   self.s['ManagementSourceSha256']={}
+   for filename in ['pearl_controller.py','payout_experience.py','gpu_clients.py','gpu_driver.py','payout_limits.py']:
+    with (SOURCE/filename).open('rb') as code:self.s['ManagementSourceSha256'][filename]=hashlib.file_digest(code,'sha256').hexdigest()
+   self.save()
    subprocess.Popen([str(PY),str(SOURCE/'coexist_monitor.py')],cwd=ROOT,creationflags=subprocess.CREATE_NO_WINDOW|subprocess.BELOW_NORMAL_PRIORITY_CLASS)
    if self.mode=='calibrate':
     results=list(completed)
@@ -164,7 +170,7 @@ class Controller:
      baseline=self.cooldown('准备'+str(watts)+'W')
      r=self.mine(watts,720,'profile-'+str(watts)+'W',extend=True);r['Cooldown']=baseline;results.append(r)
      write(self.run/'calibration-progress.json',{'Status':'running','Results':results})
-     if r['StopReason']!='time_limit':break
+     if r['StopReason']!='time_limit':raise EndSession(r['StopReason'])
     eligible=[r for r in results if r['Steady'] and r['StopReason']=='time_limit' and r['CoreSteadyMaximum']<=78 and r['HotspotMaximum']<=95 and r['MemoryJunctionMaximum']<=90 and r['AcceptedShares']>0 and r['RejectedShares']==0]
     if not eligible:raise EndSession('No tested profile passed comfort criteria')
     best=max(r['THsPerWatt'] for r in eligible);choice=max((r for r in eligible if r['THsPerWatt']>=best*.95),key=lambda r:r['AverageHashrateTHs'])

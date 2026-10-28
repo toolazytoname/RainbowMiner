@@ -6,6 +6,7 @@ param(
  [string]$ExpectedSha256='61fc4ff4fa111a641f3d70345ff74d8620ab16db12319f29ed89791e9034f22f'
 )
 $ErrorActionPreference='Stop'
+$ExpectedExecutable=[IO.Path]::GetFullPath($ExpectedExecutable)
 $root=Split-Path $PSScriptRoot
 Import-Module (Join-Path $root 'Modules/KRig.psm1') -Force
 function Assert-True($Value,[string]$Message){if(-not $Value){throw $Message}}
@@ -15,6 +16,18 @@ Assert-True ($listeners.Count -ge 1) 'No active KRig API listener'
 Assert-True (@($listeners|Where-Object {$_.LocalAddress -ne '127.0.0.1'}).Count -eq 0) 'KRig API is not loopback-only'
 $ownerIds=@($listeners.OwningProcess|Select-Object -Unique)
 Assert-True ($ownerIds.Count -eq 1) 'Unexpected multiple listener owners'
+New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
+$listenerOwner=[int]$ownerIds[0]
+$apiTransport='Winsock listener'
+if($listenerOwner -eq 4){
+    # Windows HttpListener uses kernel-owned sockets. Tie the exact URL's
+    # request queue to its user-mode handler; do not accept PID 4 by itself.
+    $snapshot=(& netsh.exe http show servicestate view=requestq verbose=yes | Out-String)
+    Assert-True ($LASTEXITCODE -eq 0) 'Cannot inspect HTTP.sys request queues'
+    $handler=KRig\Get-KRigHttpSysHandler -Snapshot $snapshot -ApiPort $ApiPort
+    $ownerIds=@([int]$handler.ProcessId);$apiTransport='HTTP.sys request queue'
+    $handler.RequestQueue|Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'http-sys-request-queue.txt') -Encoding UTF8
+}
 $miner=Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$ownerIds[0])
 Assert-True ($null -ne $miner -and $miner.ExecutablePath -ieq $ExpectedExecutable) 'API owner is not the expected KRig binary'
 Assert-True ((Get-FileHash -LiteralPath $ExpectedExecutable -Algorithm SHA256).Hash -ieq $ExpectedSha256) 'KRig executable hash mismatch'
@@ -67,7 +80,7 @@ Assert-True ($api.LastRates.PearlHash -eq $observed.Hashrate) 'Native class chan
 Assert-True ($api.LastShares[0] -eq $observed.Accepted -and $api.LastShares[1] -eq $observed.Rejected -and $api.LastShares[2] -eq $observed.Stale) 'Native class changed share counters'
 $result=[ordered]@{
  Time=[datetime]::UtcNow.ToString('o');PowerShell=$PSVersionTable.PSVersion.ToString();Passed=$true
- ApiUrl=$script:ExpectedUrl;MinerPid=[int]$ownerIds[0];Executable=$miner.ExecutablePath;ExecutableSha256=$ExpectedSha256
+ ApiUrl=$script:ExpectedUrl;ApiTransport=$apiTransport;KernelListenerPid=$listenerOwner;MinerPid=[int]$ownerIds[0];Executable=$miner.ExecutablePath;ExecutableSha256=$ExpectedSha256
  HashrateBaseUnits=$observed.Hashrate;Accepted=$observed.Accepted;Rejected=$observed.Rejected;Stale=$observed.Stale
  AlgorithmLabels=@($script:LastPayload.devices|ForEach-Object {$_.algorithms}|ForEach-Object {if($_.name){$_.name}elseif($_.algorithm){$_.algorithm}else{'not-reported'}})
  NativeClassSourceSha256=(Get-FileHash -LiteralPath (Join-Path $root 'Modules/MinerAPIs.psm1') -Algorithm SHA256).Hash.ToLowerInvariant()

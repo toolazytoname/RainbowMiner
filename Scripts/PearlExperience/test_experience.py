@@ -55,10 +55,20 @@ class BudgetTests(unittest.TestCase):
         with patch.object(pe,"mining_mutex",lock):e._execute_experience_locked()
         self.assertEqual(e.state["Phase"],"payout_recorded")
     def test_mine_respects_shorter_manual_duration(self):
-        e=object.__new__(pe.Experience);e.deadline=time.monotonic()+3600;e.state={};e.s={};e.run=None;e.publish=Mock();e.monitor_stop=Mock()
+        e=object.__new__(pe.Experience);e.mode='mine';e.monitor=None;e.deadline=time.monotonic()+3600;e.state={};e.s={};e.run=None;e.publish=Mock();e.monitor_stop=Mock()
         with patch.object(pe.threading,"Thread") as thread,patch.object(pc.Controller,"mine",return_value={}) as mine:
             e.mine(220,60,"test");self.assertEqual(mine.call_args.args[1],60)
             with self.assertRaises(ValueError):e.mine(220,60,"test",extend=True)
+    def test_calibration_keeps_one_pool_watch_and_original_deadline(self):
+        e=object.__new__(pe.Experience);e.mode='calibrate';e.monitor=None;e.deadline=time.monotonic()+30;e.state={};e.s={};e.run=None;e.publish=Mock();e.monitor_stop=Mock()
+        with patch.object(pe.threading,"Thread") as thread,patch.object(pc.Controller,"mine",return_value={}) as mine:
+            e.mine(180,720,"profile-180",extend=True);e.mine(200,720,"profile-200",extend=True)
+            self.assertEqual(thread.call_count,1);e.monitor_stop.set.assert_not_called()
+            self.assertTrue(all(0<c.args[1]<=30 and c.kwargs['extend'] for c in mine.call_args_list))
+    def test_deadline_stops_during_calibration(self):
+        e=object.__new__(pe.Experience);e.mode='calibrate';e.deadline=time.monotonic()-1;e.end_reason=None
+        with patch.object(pc.Controller,"check_stop"):
+            with self.assertRaisesRegex(pc.EndSession,"original_mining_deadline_reached"):e.check_stop()
     def test_pool_threshold_and_invalid_accounting(self):
         empty={"count":0,"results":[]}
         self.assertTrue(pe.interpret({"total":"1","confirmed":"0","unconfirmed":"1","threshold":"1"},empty)["GoalReached"])
@@ -90,6 +100,11 @@ class CleanupTests(unittest.TestCase):
             with self.assertRaisesRegex(pc.GuardStop,"other_gpu_workload"):c.guard({"Gpu":normal},220)
         normal["Hotspot"]=float("nan")
         with self.assertRaisesRegex(pc.GuardStop,"invalid_temperature_sensor"):c.guard({"Gpu":normal},220)
+    def test_gpu_application_during_cooldown_yields_before_any_mining(self):
+        c=self.controller();c.telemetry=Mock(return_value={"Epoch":0,"Gpu":{"Temperature":40,"Hotspot":50,"MemoryJunction":50}})
+        with patch.object(pc,"gpu_processes",return_value={999999:"blender.exe"}):
+            with self.assertRaisesRegex(pc.EndSession,"other_gpu_workload_during_cooldown"):c.cooldown("test")
+        c.gpu.power.assert_not_called()
     def test_runtime_preconditions_survive_optimized_python(self):
         c=self.controller()
         with self.assertRaises(ValueError):c.mine(280,60,"should-not-start")

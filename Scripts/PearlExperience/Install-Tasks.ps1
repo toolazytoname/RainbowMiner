@@ -16,9 +16,11 @@ if(-not $EvidenceDirectory){$EvidenceDirectory='D:\AI\Playgrounds\RainbowMiner\'
 New-Item -ItemType Directory -Path $EvidenceDirectory -Force | Out-Null
 $principal=New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Highest
 $settings=New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 50) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-foreach($name in 'LazyPC-PearlMining','LazyPC-PearlExperience'){
+foreach($name in 'LazyPC-PearlMining','LazyPC-PearlExperience','LazyPC-PearlTuning'){
  Export-ScheduledTask -TaskName $name | Set-Content -LiteralPath (Join-Path $EvidenceDirectory ($name+'.before.xml')) -Encoding UTF8
- $action=New-ScheduledTaskAction -Execute $python -Argument ('-u "'+(Join-Path $PSScriptRoot 'payout_experience.py')+'"') -WorkingDirectory $root
+ $arguments='-u "'+(Join-Path $PSScriptRoot 'payout_experience.py')+'"'
+ if($name -eq 'LazyPC-PearlTuning'){$arguments+=' --calibrate'}
+ $action=New-ScheduledTaskAction -Execute $python -Argument $arguments -WorkingDirectory $root
  Register-ScheduledTask -TaskName $name -Action $action -Principal $principal -Settings $settings -Force -Description 'Versioned one-shot PRL supervisor; original deadline and first payout threshold; no triggers.' | Out-Null
 }
 $oldStart=Join-Path $root 'Start-PearlMining.ps1'
@@ -31,6 +33,6 @@ if(`$CheckOnly){& '$entry' -Action Status;exit `$LASTEXITCODE}
 if(`$PSBoundParameters.ContainsKey('Minutes')){& '$entry' -Action Start -Minutes `$Minutes}else{& '$entry' -Action Start}
 "@
 [IO.File]::WriteAllText($oldStart,$wrapper,[Text.UTF8Encoding]::new($true))
-$receipt=[ordered]@{InstalledAt=(Get-Date).ToString('o');SourceDirectory=$PSScriptRoot;Python=$python;Tasks=@('LazyPC-PearlMining','LazyPC-PearlExperience');TriggersCreated=0;StartedMining=$false;EvidenceDirectory=$EvidenceDirectory;SourceCommit=(& 'D:\Apps\Git\cmd\git.exe' -C $repo rev-parse HEAD).Trim()}
+$receipt=[ordered]@{InstalledAt=(Get-Date).ToString('o');SourceDirectory=$PSScriptRoot;Python=$python;Tasks=@('LazyPC-PearlMining','LazyPC-PearlExperience','LazyPC-PearlTuning');TriggersCreated=0;StartedMining=$false;EvidenceDirectory=$EvidenceDirectory;SourceCommit=(& 'D:\Apps\Git\cmd\git.exe' -C $repo rev-parse HEAD).Trim()}
 $receipt | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $EvidenceDirectory 'install-result.json') -Encoding UTF8
 $receipt | ConvertTo-Json -Depth 4

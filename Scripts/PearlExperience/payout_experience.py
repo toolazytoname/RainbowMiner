@@ -34,7 +34,7 @@ def fetch(wallet):
     return interpret(*values)
 
 def render(state):
-    phase={'preflight':'准备中','mining':'累计到门槛后自动停止','waiting_for_pool_payout':'挖矿已结束，等待矿池确认和打款','payout_recorded':'矿池已记录打款，体验结束','stopped_before_goal':'已停止，不自动重启','waiting_timeout':'挖矿已结束，打款尚待确认','error':'已停止，检查记录'}.get(state.get('Phase'),state.get('Phase',''))
+    phase={'preflight':'准备中','mining':'累计到门槛后自动停止','calibrating':'功率标定中，仍受原截止时间和首次门槛约束','waiting_for_pool_payout':'挖矿已结束，等待矿池确认和打款','payout_recorded':'矿池已记录打款，体验结束','stopped_before_goal':'已停止，不自动重启','waiting_timeout':'挖矿已结束，打款尚待确认','error':'已停止，检查记录'}.get(state.get('Phase'),state.get('Phase',''))
     esc=lambda value:html.escape(str(value))
     cells=''.join(f'<tr><th>{label}</th><td>{esc(state.get(key,"—"))}</td></tr>' for key,label in [('Time','更新时间'),('TotalPrl','池内累计 PRL'),('ConfirmedPrl','已确认 PRL'),('UnconfirmedPrl','待确认 PRL'),('ThresholdPrl','打款门槛 PRL'),('RemainingPrl','距离门槛 PRL'),('PayoutCount','矿池打款记录数'),('MiningStopped','挖矿是否停止'),('PowerRestored','原功率限制已恢复'),('MiningDeadline','挖矿最长截止时间'),('SessionStopReason','停止原因'),('Error','最近错误')])
     url=BASE+'/prl/miner/stats/'+state['Wallet']
@@ -42,8 +42,9 @@ def render(state):
     REPORT.write_text(page,encoding='utf-8')
 
 class Experience(Controller):
-    def __init__(self):
-        super().__init__('mine')
+    def __init__(self,mode='mine'):
+        if mode not in ['mine','calibrate']:raise ValueError('Unsupported experience mode')
+        super().__init__(mode)
         self.end_reason=None;self.monitor_stop=threading.Event();self.monitor=None
         previous=load(STATUS) if STATUS.exists() else None
         if previous and previous.get('Wallet')!=self.cfg['wallet']:raise ValueError('Existing experience belongs to a different public wallet')
@@ -75,15 +76,13 @@ class Experience(Controller):
                 self.publish()
             if self.monitor_stop.wait(60):return
     def mine(self,watts,seconds,label,extend=False):
-        if extend:raise ValueError('This experience does not run calibration')
+        if extend and self.mode!='calibrate':raise ValueError('Mining mode does not run calibration')
         remaining=min(seconds,int(self.deadline-time.monotonic()))
         if remaining<=0:raise EndSession('original_mining_deadline_reached')
-        self.state.update(Phase='mining',SessionId=self.s.get('SessionId'),RunDirectory=str(self.run));self.publish()
-        self.monitor=threading.Thread(target=self.watch,name='public-pool-watch',daemon=True);self.monitor.start()
-        try:return super().mine(watts,remaining,label,extend=False)
-        finally:
-            self.monitor_stop.set()
-            if self.monitor:self.monitor.join(timeout=20)
+        self.state.update(Phase='calibrating' if self.mode=='calibrate' else 'mining',SessionId=self.s.get('SessionId'),RunDirectory=str(self.run));self.publish()
+        if self.monitor is None:
+            self.monitor=threading.Thread(target=self.watch,name='public-pool-watch',daemon=True);self.monitor.start()
+        return super().mine(watts,remaining,label,extend=extend)
     def execute(self):
         with mining_mutex('Global\\LazyPC-PearlPayoutExperience'):return self._execute_experience_locked()
     def _execute_experience_locked(self):
@@ -95,7 +94,10 @@ class Experience(Controller):
                 else:
                     if self.deadline<=time.monotonic():
                         self.state.update(MiningStopped=True,PowerRestored=True,Phase='stopped_before_goal',SessionStopReason='original_mining_deadline_reached');self.publish();return
-                    super()._execute_locked()
+                    try:super()._execute_locked()
+                    finally:
+                        self.monitor_stop.set()
+                        if self.monitor:self.monitor.join(timeout=20)
                     latest=load(RT/'session.json')
                     mine_result=None
                     result_file=self.run/'selected-profile'/'result.json' if self.run else None
@@ -142,4 +144,6 @@ if __name__=='__main__':
     elif '--check-pool' in sys.argv:print(json.dumps(fetch(load(ROOT/'mining-config.json')['wallet']),ensure_ascii=False))
     else:
         # Verify the public API before starting GPU work. Controller independently guards GPU/sensors.
-        Experience().execute()
+        import argparse
+        parser=argparse.ArgumentParser();parser.add_argument('--calibrate',action='store_true');args=parser.parse_args()
+        Experience('calibrate' if args.calibrate else 'mine').execute()

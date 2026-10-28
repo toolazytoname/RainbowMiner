@@ -124,6 +124,27 @@ Test-Case 'Real algorithm database and pool-key helper produce the KRig launch s
     $items=@(& $block -Name KRig -Pools $pools -InfoOnly $false)
     Assert-True ($items.Count -eq 1 -and $items[0].API -eq 'KRig' -and $items[0].HashRates.PSObject.Properties.Name -contains 'PearlHash') 'Definition is incompatible with actual algorithm/pool mapping'
 }
+Test-Case 'HTTP.sys exact request queue identifies its user-mode handler' {
+    $fixture=@'
+HTTP service snapshot:
+-----
+Queue alpha:
+    Processes:
+        ID: 1234, image: other.exe
+    Registered URLs:
+        HTTP://127.0.0.1:18491:127.0.0.1/
+Queue beta:
+    Processes:
+        ID: 5678, image: krig-miner.exe
+    Registered URLs:
+        HTTP://127.0.0.1:18490:127.0.0.1/
+'@
+    $r=KRig\Get-KRigHttpSysHandler -Snapshot $fixture -ApiPort 18490
+    Assert-True ($r.ProcessId -eq 5678 -and $r.RequestQueue -notmatch '1234') 'Mixed owners from different queues'
+    foreach($bad in @($fixture.Replace('18490','184900'),$fixture.Replace('ID: 5678,','ID: 4,'),$fixture.Replace('ID: 5678, image: krig-miner.exe',"ID: 5678, image: krig-miner.exe`n        ID: 9999, image: other.exe"))) {
+        $threw=$false;try{KRig\Get-KRigHttpSysHandler -Snapshot $bad -ApiPort 18490|Out-Null}catch{$threw=$true};Assert-True $threw 'Accepted missing or ambiguous HTTP.sys ownership'
+    }
+}
 $failed=@($checks|Where-Object {-not $_.Passed})
 $result=[pscustomobject]@{Time=[datetime]::UtcNow.ToString('o');PowerShell=$PSVersionTable.PSVersion.ToString();Passed=$checks.Count-$failed.Count;Failed=$failed.Count;Checks=@($checks.ToArray());GPUWorkStarted=$false;PoolCalls=0;MinerStarted=$false}
 if($ResultPath){$result|ConvertTo-Json -Depth 7|Set-Content -LiteralPath $ResultPath -Encoding UTF8}
