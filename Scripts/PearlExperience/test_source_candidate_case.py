@@ -39,4 +39,14 @@ class CandidateManifestTests(unittest.TestCase):
         obj=object.__new__(c.CandidateExperience);obj.s={"AcceptedShares":1}
         with patch.object(c.Experience,"check_stop",return_value=None),self.assertRaisesRegex(c.EndSession,"candidate_first_accepted_share"):obj.check_stop()
         with patch.object(c.Experience,"check_stop",side_effect=c.EndSession("user_stop")),self.assertRaisesRegex(c.EndSession,"user_stop"):obj.check_stop()
+    def test_identical_versioned_app_copy_keeps_the_confirmation_identity(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root,exe,path,result=self.fixture(folder);apps=root/"apps";staged=apps/"version/soat-miner.exe";staged.parent.mkdir(parents=True);staged.write_bytes(exe.read_bytes())
+            with patch.object(c,"SOURCE_PROJECT",root),patch.object(c,"STAGED_ROOT",apps):backend=c.candidate_from_confirmation(path,staged)
+            self.assertEqual(backend.executable,staged.resolve());self.assertEqual(backend.sha256,result["plan"]["executable_sha256"])
+    def test_changed_or_unowned_app_copy_is_rejected(self):
+        for mode in ["hash","path"]:
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as folder:
+                root,exe,path,result=self.fixture(folder);apps=root/"apps";staged=apps/"version/soat-miner.exe";staged.parent.mkdir(parents=True);staged.write_bytes(b"different" if mode=="hash" else exe.read_bytes())
+                with patch.object(c,"SOURCE_PROJECT",root),patch.object(c,"STAGED_ROOT",apps if mode=="hash" else root/"other"),self.assertRaises(ValueError):c.candidate_from_confirmation(path,staged)
 if __name__=="__main__":unittest.main(verbosity=2)

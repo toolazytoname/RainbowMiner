@@ -5,9 +5,10 @@ from compute_backend import ComputeBackend
 from payout_experience import Experience
 from pearl_controller import ROOT,EndSession,load,write
 SOURCE_PROJECT=pathlib.Path("D:/Projects/toolazytoname/soat-miner")
+STAGED_ROOT=pathlib.Path("D:/Apps/SOAT")
 def sha(path):
     with pathlib.Path(path).open("rb") as f:return hashlib.file_digest(f,"sha256").hexdigest()
-def candidate_from_confirmation(path):
+def candidate_from_confirmation(path,staged_executable=None):
     result=load(pathlib.Path(path));plan=result["plan"];review=result.get("review",{})
     if result.get("phase")!="complete" or plan.get("mode")!="confirm" or review.get("comparison_valid") is not True or review.get("candidate_confirmed_improvement") is not True:raise ValueError("A material controlled confirmation is required before constructing GPU management")
     if plan.get("power_watts")!=220 or plan.get("case_seconds",0)<240 or [c["name"] for c in result["cases"]]!=["A1","B","A2"]:raise ValueError("Unexpected controlled measurement")
@@ -23,6 +24,10 @@ def candidate_from_confirmation(path):
     for m,n in [(256,768),(1024,1024),(4096,65536)]:
         key=f"{m}x{n}-{variant}"
         if key not in tested or tested[key]["binary_sha256"]!=verifier:raise ValueError("Current verifier did not check all required shapes")
+    if staged_executable is not None:
+        staged=pathlib.Path(staged_executable).resolve()
+        if staged.name!="soat-miner.exe" or not staged.is_relative_to(STAGED_ROOT.resolve()) or sha(staged)!=plan["executable_sha256"]:raise ValueError("Staged candidate must be the identical binary under the versioned SOAT app directory")
+        exe=staged
     return ComputeBackend("soat",exe,plan["executable_sha256"],"T MAC/s","4096x65536",tile)
 class CandidateExperience(Experience):
     def check_stop(self):
@@ -36,12 +41,12 @@ def unconfirmed(run):
         except ValueError:continue
         if row.get("event")=="error" and "no reply from the pool" in row.get("msg",""):count+=1
     return count
-def run_case(confirmation,minutes,receipt):
+def run_case(confirmation,minutes,receipt,staged_executable=None):
     if isinstance(minutes,bool) or not isinstance(minutes,int) or not 1<=minutes<=5:raise ValueError("Trial must be 1..5 mining minutes")
-    backend=candidate_from_confirmation(confirmation);receipt=pathlib.Path(receipt)
+    backend=candidate_from_confirmation(confirmation,staged_executable);receipt=pathlib.Path(receipt)
     if not receipt.is_absolute() or receipt.exists():raise ValueError("Use a new absolute trial receipt")
     receipt.parent.mkdir(parents=True,exist_ok=True);config=ROOT/"mining-config.json";before=sha(config)
-    state={"started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),"confirmation":str(confirmation),"confirmation_sha256":sha(confirmation),"candidate":backend.receipt(),"maximum_mining_minutes":minutes,"production_config_sha256_before":before,"default_config_is_written":False,"scope":"One source candidate, original wallet/pool/deadline and all existing guards; stop on first accepted share or earlier guard/manual stop. No automatic retry."};write(receipt,state)
+    state={"started_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),"confirmation":str(confirmation),"confirmation_sha256":sha(confirmation),"entry_source_sha256":sha(pathlib.Path(__file__)),"candidate":backend.receipt(),"maximum_mining_minutes":minutes,"production_config_sha256_before":before,"default_config_is_written":False,"scope":"One source candidate, original wallet/pool/deadline and all existing guards; stop on first accepted share or earlier guard/manual stop. No automatic retry."};write(receipt,state)
     try:
         experience=CandidateExperience("mine");experience.cfg=dict(experience.cfg,default_minutes=minutes);experience.backend=backend;experience.execute();final=experience.s;missing=unconfirmed(experience.run) if experience.run else None
         state.update(status="finished",session=final,unconfirmed_submissions=missing,accepted_trial=bool(final.get("Status")=="stopped" and final.get("PowerRestored") and final.get("StopReason")=="candidate_first_accepted_share" and final.get("AcceptedShares",0)>0 and not final.get("RejectedShares",0) and not final.get("StaleShares",0) and missing==0))
@@ -50,5 +55,5 @@ def run_case(confirmation,minutes,receipt):
         state.update(ended_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),production_config_sha256_after=sha(config));state["production_config_unchanged"]=state["production_config_sha256_after"]==before;write(receipt,state)
     return state
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument("--confirmation",type=pathlib.Path,required=True);ap.add_argument("--minutes",type=int,default=5);ap.add_argument("--receipt",type=pathlib.Path,required=True);args=ap.parse_args();print(json.dumps(run_case(args.confirmation,args.minutes,args.receipt)))
+    ap=argparse.ArgumentParser();ap.add_argument("--confirmation",type=pathlib.Path,required=True);ap.add_argument("--minutes",type=int,default=5);ap.add_argument("--receipt",type=pathlib.Path,required=True);ap.add_argument("--staged-executable",type=pathlib.Path);args=ap.parse_args();print(json.dumps(run_case(args.confirmation,args.minutes,args.receipt,args.staged_executable)))
 if __name__=="__main__":main()
