@@ -8,7 +8,7 @@ from gpu_driver import Gpu
 from pool_transport import verified_pool_transport
 from compute_backend import select_compute_backend,read_source_stats,BackendStatsError
 from process_identity import capture_owned_child,capture_controller
-from gpu_clients import gpu_processes,DESKTOP_PROCESSES
+from gpu_clients import gpu_processes,DESKTOP_PROCESSES,gpu_busy_before_start
 SOURCE=pathlib.Path(__file__).parent;ROOT=pathlib.Path(os.environ.get('PRL_EXPERIENCE_HOME','D:/Apps/KRig')).resolve();RT=ROOT/'Runtime';EXE=ROOT/'1.5.12/krig-miner.exe'
 PY=pathlib.Path(sys.executable);STOP=RT/'stop.request';CANCEL=RT/'cancel.request'
 OPENER=urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -81,6 +81,14 @@ class Controller:
   if not math.isfinite(g['PowerLimit']) or abs(g['PowerLimit']-watts)>2:raise GuardStop('external_power_limit_change')
   allowed={os.getpid(),self.proc.pid if self.proc else None}
   if any(pid not in allowed and name not in DESKTOP_PROCESSES for pid,name in gpu_processes().items()):raise GuardStop('other_gpu_workload')
+ def idle_before_start(self):
+  # A bounded preflight wait, before any child or power change.
+  deadline=time.monotonic()+30
+  while True:
+   self.check_stop();g=self.gpu.read();self.guard({'Gpu':g},g['PowerLimit'])
+   if not gpu_busy_before_start(g):return g
+   if time.monotonic()>=deadline:raise EndSession('other_gpu_workload_before_start')
+   time.sleep(1)
  def stop_miner(self):
   if not self.s:return
   alive=False
@@ -126,8 +134,7 @@ class Controller:
  def mine(self,watts,seconds,label,extend=False):
   require(isinstance(watts,int) and not isinstance(watts,bool) and 100<=watts<=220,'Power outside the conservative 100..220 W operating range')
   require(isinstance(seconds,(int,float)) and math.isfinite(seconds) and seconds>0,'Mining time must be finite and positive')
-  self.check_stop();g=self.gpu.read()
-  if g['Utilization']>15 or g['MemoryMiB']>2500:raise EndSession('other_gpu_workload_before_start')
+  g=self.idle_before_start()
   self.guard({'Gpu':g},g['PowerLimit'])
   self.samples=[];self.last_api={};start=time.monotonic();reason='time_limit';sub=self.run/label;sub.mkdir(exist_ok=True)
   self.s.update(Status='calibrating' if extend else 'running',Phase=label,MiningPowerWatts=watts,PowerRestored=False,ReportedRate=0,ReportedRateUnit=self.backend.rate_unit,AcceptedShares=0,RejectedShares=0,PlannedStop=(datetime.datetime.now().astimezone()+datetime.timedelta(seconds=seconds+(360 if extend else 0))).isoformat())
@@ -171,8 +178,7 @@ class Controller:
   try:
    self.backend.verify_binary()
    for p in [STOP,CANCEL]:p.unlink(missing_ok=True)
-   g=self.gpu.read();self.original=g['PowerLimit']
-   if g['Utilization']>15 or g['MemoryMiB']>2500:raise RuntimeError('GPU is busy; refusing to interrupt another workload')
+   g=self.idle_before_start();self.original=g['PowerLimit']
    if any(pid!=os.getpid() and name not in DESKTOP_PROCESSES for pid,name in gpu_processes().items()):raise RuntimeError('Another GPU application is present; refusing to start')
    completed=[]
    if self.resume:
