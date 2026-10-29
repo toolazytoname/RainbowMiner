@@ -2,7 +2,7 @@
 
 The default workstation route runs the pinned MIT [SOAT CUDA backend](https://github.com/toolazytoname/soat-miner/tree/xiaotutou-prl3090) through an owned, certificate- and hostname-verified TLS relay to the original Kryptex PRL pool. This GPL management repository owns start/stop, telemetry, resource guards and the first-payout experience. The separate MIT repository contains the modifiable compute kernels. Users need one start/stop entry.
 
-The tested source build has no miner developer-fee round. The full upstream RainbowMiner profit-switching/support loop is not run by this local manager. KRig remains a separate optional binary and native adapter. A local negative test showed that KRig 1.5.12 accepted a self-signed certificate; the verified loopback relay then made that vendor classify the visible endpoint as a third-party pool and charge 3%. The backend selector therefore refuses KRig relay use unless `allow_krig_relay_fee` is explicitly true. It never silently falls back to KRig or CPU.
+The tested source build has no miner developer-fee round. The full upstream RainbowMiner profit-switching/support loop is not run by this local manager. KRig remains a separate optional binary and native adapter. A localhost negative test showed that KRig 1.5.12 accepted a self-signed certificate (recognized native Kryptex-host verification remains untested); the verified loopback relay then made that vendor classify the visible endpoint as a third-party pool and charge 3%. The backend selector therefore refuses KRig relay use unless `allow_krig_relay_fee` is explicitly true. It never silently falls back to KRig or CPU.
 
 ## Operation
 

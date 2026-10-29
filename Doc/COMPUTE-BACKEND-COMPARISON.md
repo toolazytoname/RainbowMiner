@@ -8,7 +8,7 @@ Workstation: one RTX 3090 24 GB, Windows, 220 W cap, original pool/wallet/PPS+ m
 | Device-reported unit | Explicit T MAC/s | Native TH/s API/display; calibrated 1:1 to T MAC/s for this pinned RTX3090 / KRig1.5.12 configuration |
 | Controlled source optimization | 46.6475 / 51.3258 / 46.9197 T MAC/s A/B/A, +9.709%, A drift 0.582%, all steady and restored | Completed observed fixed-window result 59.7103 T MAC/s at 219.72 W; strict overall comparison remains flagged |
 | Real proof path | Exact optimized binary: standalone 3 accepted / 0 rejected; own manager 2 accepted / 0 rejected | Prior own-manager native run: 5 accepted / 0 rejected |
-| Authenticated TLS | Own relay requires certificate chain and hostname before forwarding payload | Native negative test accepted a self-signed certificate; own relay works but vendor then charges its 3% third-party-pool fee |
+| Authenticated TLS | Own relay requires certificate chain and hostname before forwarding payload | Localhost negative test accepted a self-signed chain; native recognized-Kryptex policy is untested. Our verified relay works and is classified by KRig as a 3% endpoint |
 | Miner fee | No developer-fee round in this source backend | 0% Kryptex hostname policy, observed 3% on loopback; explicit fee configuration required in own manager |
 | Local operator acceptance | Source process/log/identity/TLS checks in PS7 and PS5.1; incoming-GPU yield 3 seconds; CLI stop 5 seconds, actual panel button stop approximately 2 seconds; power restore and panel inspected | Native API class validated against real HTTP.sys service in both shells; full upstream web UI not covered |
 
