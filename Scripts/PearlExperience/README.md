@@ -94,3 +94,12 @@ Both telemetry modules now execute initialization and enumeration unconditionall
 Four actual read-only samples (both modules, normal and -O) then passed against the installed driver. They only initialized/read telemetry, never called the power setter or started a CUDA workload. The original mining process PID and creation time remained identical throughout, and its 220 W cap and accepted-share progress were preserved. The already running normal-mode miner/controller was not restarted; future controller/tool launches load the corrected initialization. This reliability repair changes no CUDA kernel, binary, throughput claim, fee policy or deadline.
 
 Windows evidence: D:\\AI\\Playgrounds\\RainbowMiner\\20261029-telemetry-init, including red repro logs, both-mode host results and the actual read-only smoke receipt.
+
+
+## Source failure-count scope
+
+The open source JSON rejected value and compatible RejectedShares state field are combined client failure counts, including local verification, obsolete/unsent proofs, no-reply uncertainty and negative synchronous pool replies. They are not pool-only rejection verdicts. The source panel now labels this 失败/未提交; KRig keeps its native API rejection label. Source stale results are not separately exposed, so a compatibility placeholder zero is not independent evidence of zero stale work. Read the source logs and original pool record to interpret an event.
+
+The upstream-style synchronous/null readout bug is fixed in the companion soat-miner source: local failures were incremented but could remain invisible unless an asynchronous counter API was available. Loopback red/green tests cover rejected/accepted/unsent/no-reply outcomes and accepted-count preservation; independent log guards prevent legacy zero counters from making a comparison or invalid benchmark appear clean. A previous matched A2 contains one obsolete proof not sent and is now marked needs_review, with all observed rate data preserved. Exact counter/GPU/build evidence stays in D:\\AI\\Playgrounds\\soat-miner\\20261029-submission-readout.
+
+Only panel wording and encoding change in this manager revision. Start/stop, power/thermal recovery, original absolute deadline and fee defaults are unchanged. PowerShell 7 and 5.1 syntax validation passed.

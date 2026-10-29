@@ -63,7 +63,7 @@ $timer.Add_Tick({try{
  $shownRate=if($s.Status -in @('cooling','stopped')){0}elseif($s.PSObject.Properties['ReportedRate']){$s.ReportedRate}else{$s.HashrateTHs}
  $unit=if($s.ReportedRateUnit){[string]$s.ReportedRateUnit}else{'TH/s'}
  if($g){
-  $metrics.Text=('核心 {0}℃    热点 {1}℃    显存 {2}℃    （最近记录）' -f $g.Temperature,$g.Hotspot,$g.MemoryJunction)+"`r`n"+('显卡 {0:N0}W / 上限 {1:N0}W    算力 {2} {3}' -f $g.Power,$g.PowerLimit,$shownRate,$unit)+"`r`n"+('本轮份额：已接受 {0}    已拒绝 {1}' -f $s.AcceptedShares,$s.RejectedShares)
+  $metrics.Text=('核心 {0}℃    热点 {1}℃    显存 {2}℃    （最近记录）' -f $g.Temperature,$g.Hotspot,$g.MemoryJunction)+"`r`n"+('显卡 {0:N0}W / 上限 {1:N0}W    算力 {2} {3}' -f $g.Power,$g.PowerLimit,$shownRate,$unit)+"`r`n"+$(if($s.ComputeBackend.Kind -eq 'soat'){('本轮结果：已接受 {0}    失败/未提交 {1}' -f $s.AcceptedShares,$s.RejectedShares)}else{('本轮份额：已接受 {0}    已拒绝 {1}' -f $s.AcceptedShares,$s.RejectedShares)})
  }
  if($s.Status -eq 'running' -and $s.PlannedStop){$phase.Text='本轮计划停止：'+([datetimeoffset]::Parse($s.PlannedStop).LocalDateTime.ToString('MM-dd HH:mm'))}
  if($s.Status -eq 'cooling'){$phase.Text=[string]$s.Phase+'；等待温度稳定后自动继续'}
