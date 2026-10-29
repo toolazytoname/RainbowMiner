@@ -49,7 +49,7 @@ def gpu_processes():
     return processes
 
 DESKTOP_PROCESSES = {'dwm.exe', 'explorer.exe', 'shellhost.exe', 'msedge.exe',
-                     'msedgewebview2.exe', 'chrome.exe', 'chatgpt.exe',
+                     'msedgewebview2.exe', 'chrome.exe', 'chatgpt.exe', 'orca.exe',
                      'applicationframehost.exe', 'textinputhost.exe', 'tabtip.exe',
                      'logonui.exe', 'armourycrate.exe', 'gameviewer.exe',
                      'phoneexperiencehost.exe', 'realtekaudiocontrol.exe',
