@@ -83,3 +83,14 @@ Five host-only waiting scenarios cover transient desktop load, persistent busy t
 
 
 The final matched-control attempt was interrupted during cooldown when the user opened the local Orca chat application. Its actual D:\Apps\Orca\Orca.exe path, valid SignPath Foundation signature, product metadata and Chromium GPU-renderer command were checked. Orca joins the existing desktop chat/browser classification. No mining child or measurement window had started in that interrupted control; its receipts are retained. Completed A1 and KRig B data are reused, and only the unstarted final control is explicitly resumed after this narrow fix. Model servers and other non-desktop GPU applications still trigger the existing yield guard.
+
+
+## NVAPI initialization must survive Python optimization
+
+A read-only audit found that NVAPI initialization and GPU enumeration were executed inside assert expressions. Python -O removes those expressions entirely, so the old optimized interpreter skipped both required calls and retained an invalid handle. A fake-driver regression reproduced the failure in both repositories before correction, without hardware or power calls.
+
+Both telemetry modules now execute initialization and enumeration unconditionally, reject their error codes or a GPU count other than one with RuntimeError, and explicitly require the memory-junction sensor. Seven fake-driver checks cover required call execution, initialization failure, enumeration failure, zero/multiple GPUs, missing junction sensor and read-only sampling. All 89 manager host checks and 52 relevant source-tool checks pass in normal Python and -O.
+
+Four actual read-only samples (both modules, normal and -O) then passed against the installed driver. They only initialized/read telemetry, never called the power setter or started a CUDA workload. The original mining process PID and creation time remained identical throughout, and its 220 W cap and accepted-share progress were preserved. The already running normal-mode miner/controller was not restarted; future controller/tool launches load the corrected initialization. This reliability repair changes no CUDA kernel, binary, throughput claim, fee policy or deadline.
+
+Windows evidence: D:\\AI\\Playgrounds\\RainbowMiner\\20261029-telemetry-init, including red repro logs, both-mode host results and the actual read-only smoke receipt.
