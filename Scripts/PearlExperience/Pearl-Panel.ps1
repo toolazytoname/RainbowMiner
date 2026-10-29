@@ -58,7 +58,7 @@ $timer.Add_Tick({try{
  $status.Text=$names[$s.Status];if(-not $status.Text){$status.Text=[string]$s.Status}
  $status.ForeColor=if($s.Status -eq 'stopped'){[Drawing.Color]::DimGray}else{[Drawing.Color]::FromArgb(25,110,60)}
  if($s.Phase){$phase.Text=([string]$s.Phase -replace '^profile-(\d+)W$','$1 W 稳态测试' -replace '^selected-profile$','日常挖矿')}else{$phase.Text=''}
- if($s.Status -eq 'stopped'){$reasons=@{user_stop='收到停止请求';completed='本轮时限结束';manual_recovery='已手动恢复';core_temperature_guard='核心温度保护';hotspot_temperature_guard='热点温度保护';memory_temperature_guard='显存温度保护';external_power_limit_change='外部修改功率';other_gpu_workload_before_start='显卡正被其他任务使用'};$why=$reasons[$s.StopReason];if(-not $why){$why=[string]$s.StopReason};$restore=if($s.PowerRestored){'已恢复原功率'}else{'保留外部功率，请查看记录'};$phase.Text=$why+'；'+$restore}
+ if($s.Status -eq 'stopped'){$reasons=@{user_stop='收到停止请求';completed='本轮时限结束';manual_recovery='已手动恢复';core_temperature_guard='核心温度保护';hotspot_temperature_guard='热点温度保护';memory_temperature_guard='显存温度保护';external_power_limit_change='外部修改功率';other_gpu_workload='已为其他 GPU 任务让路';other_gpu_workload_during_cooldown='冷却时检测到其他 GPU 任务';other_gpu_workload_before_start='显卡正被其他任务使用'};$why=$reasons[$s.StopReason];if(-not $why){$why=[string]$s.StopReason};$restore=if($s.PowerRestored){'已恢复原功率'}else{'保留外部功率，请查看记录'};$phase.Text=$why+'；'+$restore}
  $g=$s.LastTelemetry
  $shownRate=if($s.Status -in @('cooling','stopped')){0}elseif($s.PSObject.Properties['ReportedRate']){$s.ReportedRate}else{$s.HashrateTHs}
  $unit=if($s.ReportedRateUnit){[string]$s.ReportedRateUnit}else{'TH/s'}

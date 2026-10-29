@@ -18,14 +18,14 @@ Source rates are explicitly **T MAC/s**. They are not relabeled as KRig TH/s, po
 
 ## Invariants
 
-- One heavy GPU workload: a named mutex is shared with source experiments. Existing GPU work blocks startup; an incoming GPU client stops only our owned miner. CPU workloads are allowed, and our controller/miner use BelowNormal priority.
+- One heavy GPU workload: a named mutex is shared with source experiments. Existing GPU work blocks startup; an incoming GPU client stops only our owned miner. CPU workloads are allowed, and our controller/miner use BelowNormal priority. Active and cooldown yields retain a `GpuYieldEvidence` receipt containing the observed foreign GPU PIDs and image basenames in the final session result. The panel labels these stop reasons in Chinese. This adds evidence only: the process filter is unchanged, command lines are not copied, and no automatic restart is introduced.
 - At most 220 W, with core/hotspot/memory guards of 80/100/96 C. Clocks, voltage and fans remain automatic. No CPU fallback, Defender exclusions, driver changes or boot/login mining trigger.
 - Stop and restore the starting power cap; preserve an external cap change. A child that cannot exit keeps the reduced cap and a `stop-failed` state. Recovery verifies the original Windows process handle's PID, exact creation FILETIME, executable and SHA-256 before any forced owned termination. It does not kill processes by name or restore power while owned work remains alive.
 - Preserve the original `MiningDeadline` in the existing payout state across restarts. A shorter manual duration still applies. The CLI accepts at most 2160 minutes (36 hours), but the unchanged original absolute deadline always clips the actual run; restarting never grants another 36 hours. Stop at confirmed plus pending balance reaching the first payout threshold, or at a recorded payout. No automatic restart, currency exchange, wallet signing or private-key access.
 - Check the public pool before startup and while mining. Thirty minutes of continuous pool API failure ends mining. After the threshold, release the GPU and watch payout read-only for at most 12 hours. Manual Stop cancels read-only watching too; idle gaps check every second, and each public API request has an 8-second network timeout.
 - Authenticate the original pool before forwarding a single miner payload. The child command's `127.0.0.1` endpoint is internal traffic. There is no plaintext Internet fallback. A failed relay thread, invalid source units/backend, or stale source telemetry stops the session.
 
-Only the GPU-validated `4096x65536` / `=ampere large s3 fold k64` source configuration is enabled here. The local config pins the executable SHA-256. Rebuilding a changed kernel requires repeating complete-transcript, performance and pool gates before updating that pin.
+The pinned daily source configuration is the GPU-validated `4096x65536` / `=ampere warpwide large s3 fold k64` variant. The local config pins the executable SHA-256. Rebuilding a changed kernel requires repeating complete-transcript, performance and pool gates before updating that pin.
 
 ## Deployment and checks
 

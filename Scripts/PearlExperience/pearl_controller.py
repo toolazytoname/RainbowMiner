@@ -72,6 +72,8 @@ class Controller:
   else:self.s.pop('HashrateTHs',None)
   self.save()
   return row
+ def record_gpu_yield(self,reason,foreign):
+  self.s['GpuYieldEvidence']={'Time':now(),'Reason':reason,'Phase':self.s.get('Phase'),'ForeignProcesses':[{'Pid':pid,'Name':name} for pid,name in sorted(foreign.items())]}
  def guard(self,row,watts):
   g=row['Gpu']
   for name,key in [('core_temperature_guard','Temperature'),('hotspot_temperature_guard','Hotspot'),('memory_temperature_guard','MemoryJunction')]:
@@ -80,7 +82,10 @@ class Controller:
    if g[key]>=limit:raise GuardStop(name)
   if not math.isfinite(g['PowerLimit']) or abs(g['PowerLimit']-watts)>2:raise GuardStop('external_power_limit_change')
   allowed={os.getpid(),self.proc.pid if self.proc else None}
-  if any(pid not in allowed and name not in DESKTOP_PROCESSES for pid,name in gpu_processes().items()):raise GuardStop('other_gpu_workload')
+  foreign={pid:name for pid,name in gpu_processes().items() if pid not in allowed and name not in DESKTOP_PROCESSES}
+  if foreign:
+   self.record_gpu_yield('other_gpu_workload',foreign)
+   raise GuardStop('other_gpu_workload')
  def idle_before_start(self):
   # A bounded preflight wait, before any child or power change.
   deadline=time.monotonic()+30
@@ -119,7 +124,10 @@ class Controller:
   start=time.monotonic();rows=[]
   while time.monotonic()-start<900:
    row=self.telemetry('cooldown');rows.append(row);tail=[x for x in rows if row['Epoch']-x['Epoch']<=60]
-   if any(pid!=os.getpid() and name not in DESKTOP_PROCESSES for pid,name in gpu_processes().items()):raise EndSession('other_gpu_workload_during_cooldown')
+   foreign={pid:name for pid,name in gpu_processes().items() if pid!=os.getpid() and name not in DESKTOP_PROCESSES}
+   if foreign:
+    self.record_gpu_yield('other_gpu_workload_during_cooldown',foreign)
+    raise EndSession('other_gpu_workload_during_cooldown')
    g=row['Gpu'];ready=g['Temperature']<=50 and g['Hotspot']<=65 and g['MemoryJunction']<=65
    stable=len(tail)>=10 and max(x['Gpu']['Temperature'] for x in tail)-min(x['Gpu']['Temperature'] for x in tail)<=2 and max(x['Gpu']['MemoryJunction'] for x in tail)-min(x['Gpu']['MemoryJunction'] for x in tail)<=2
    if time.monotonic()-start>=180 and ready and stable:

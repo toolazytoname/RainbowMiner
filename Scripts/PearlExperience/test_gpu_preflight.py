@@ -36,6 +36,7 @@ class StartupWaitTests(unittest.TestCase):
         from pearl_controller import Controller
         controller=object.__new__(Controller)
         controller.proc=None
+        controller.s={}
         controller.gpu=Mock()
         controller.gpu.read.side_effect=readings
         controller.check_stop=Mock()
@@ -76,6 +77,7 @@ class StartupWaitTests(unittest.TestCase):
             with self.assertRaisesRegex(GuardStop,"other_gpu_workload"):c.idle_before_start()
         sleep.assert_not_called()
         c.gpu.power.assert_not_called()
+        self.assertEqual(c.s["GpuYieldEvidence"]["ForeignProcesses"],[{"Pid":99999,"Name":"blender.exe"}])
     def test_thermal_fault_is_refused_without_wait(self):
         from unittest.mock import patch
         from pearl_controller import GuardStop

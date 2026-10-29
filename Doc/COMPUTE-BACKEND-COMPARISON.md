@@ -1,6 +1,6 @@
 # Backend selection and measured limits
 
-The selected daily backend is open SOAT for modifiable CUDA compute, verified pool compatibility and zero developer fee. The counter-corrected 2026-10-29 matched run passed its declared checks, but **KRig remains faster** on this RTX 3090: open 53.831424 versus KRig 59.305502 T MAC/s, gross KRig advantage 10.1689%. Both used a 220 W cap. This is a full-loop throughput observation, not a measured earning advantage.
+The pinned configuration uses open SOAT for modifiable CUDA compute, verified pool compatibility and zero developer fee; this is not a claim that it is the economic winner. The counter-corrected 2026-10-29 matched run passed its declared checks, but **KRig remains faster** on this RTX 3090: open 53.831424 versus KRig 59.305502 T MAC/s, gross KRig advantage 10.1689%. Both used a 220 W cap. This is a full-loop throughput observation, not a measured earning advantage.
 
 | Item | Open SOAT (selected) | KRig 1.5.12 (alternative) |
 | --- | --- | --- |
@@ -17,10 +17,16 @@ The sequence was open / KRig / open, 600 seconds per case from first selected-pr
 
 KRig's 3% acknowledgement was RAM-only for B. Applying that rate to observed work gives 57.526337 T MAC/s, an arithmetic 6.8639% lead over open. This is not payout, and native recognized-Kryptex 0% remains the legitimate competitive reference. Pool service fees are separate. All management, compute and TLS processes are on Windows; Mac is only an SSH operator.
 
-The independent PearlExperience entry does not execute the full upstream RainbowMiner donation/support loop. The manager's native KRig adapter was checked offline and against the real native API in PowerShell 7 and 5.1. Source CLI/panel controls, incoming-GPU yield, exact child identity, original deadline/threshold and power restoration have recorded acceptance. Current host checks pass 89 cases in normal Python and -O. Neither full upstream web UI coverage nor successful payout is implied.
+The independent PearlExperience entry does not execute the full upstream RainbowMiner donation/support loop. The manager's native KRig adapter was checked offline and against the real native API in PowerShell 7 and 5.1. Source CLI/panel controls, incoming-GPU yield, exact child identity, original deadline/threshold and power restoration have recorded acceptance. Current host checks pass 91 cases in normal Python and -O. GPU-yield receipts now preserve observed foreign PIDs and image names without changing the guard filter or adding automatic retries. Neither full upstream web UI coverage nor successful payout is implied.
 
 The source counter fix distinguishes combined client failures from pool-only rejection verdicts. Current source proof/readout checks and the full result are in the [source comparison report](https://github.com/toolazytoname/soat-miner/blob/xiaotutou-prl3090/docs/PRL3090-KRIG-COMPARISON.md). Rate normalization transfers the [prior hardware calibration](https://github.com/toolazytoname/soat-miner/blob/xiaotutou-prl3090/docs/PRL3090-UNIT-CALIBRATION.md) through unchanged work accounting and matching proof checks; it is not a fresh hardware replay for the new binary.
 
 Historical comparisons remain flagged and preserved: one older set failed thermal/stale checks; the aa693 set contained a locally obsolete unsent proof hidden by the old synchronous failure counter. Its earlier all-gates-pass classification was withdrawn. The current repaired run is separate. The +9.709% and later +3.4216% source optimizations are against their respective open baselines, not wins over KRig. Four slower follow-up candidates were rejected rather than promoted.
 
 Current comparison records: D:\AI\Playgrounds\soat-miner\20261029-submission-readout\matched. Managed source sessions: D:\AI\Playgrounds\RainbowMiner. The original first-threshold/absolute-deadline experience remains pending; there are no boot mining triggers, automatic retries, wallet signing or automatic currency trades.
+
+## Profit-led operating decision
+
+The current throughput evidence favors KRig. Retain the common open management layer for start/stop, power limits, thermal protection and GPU coexistence; keep the source compute backend as an experiment. Further speculative kernel tuning is not scheduled. There is no measured basis for promising that a language rewrite will close the gap.
+
+With the current certificate-verified loopback route, KRig applies a 3% miner developer fee. Multiplying the matched rate by 0.97 gives 57.526337 T MAC/s, 6.8639% above the open bracket mean. This is arithmetic on measured gross work, not measured payout or net profit. The vendor-advertised zero-fee native recognized-pool route remains separate and has not passed our certificate-verification acceptance. A backend switch must retain the same wallet, original threshold and absolute deadline, and explicitly account for the fee. No automatic switch or restart is introduced by this documentation.

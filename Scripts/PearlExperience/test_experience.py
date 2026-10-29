@@ -175,6 +175,32 @@ class CleanupTests(unittest.TestCase):
         with patch.object(pc,"gpu_processes",return_value={999999:"blender.exe"}):
             with self.assertRaisesRegex(pc.EndSession,"other_gpu_workload_during_cooldown"):c.cooldown("test")
         c.gpu.power.assert_not_called()
+        self.assertEqual(c.s["GpuYieldEvidence"]["Reason"],"other_gpu_workload_during_cooldown")
+        self.assertEqual(c.s["GpuYieldEvidence"]["ForeignProcesses"],[{"Pid":999999,"Name":"blender.exe"}])
+    def test_gpu_yield_receipt_preserves_other_clients_after_cleanup(self):
+        c=self.controller();c.proc=Mock(pid=123);c.s["Phase"]="selected-profile"
+        normal={"Temperature":70,"Hotspot":85,"MemoryJunction":80,"PowerLimit":220}
+        clients={pc.os.getpid():"python.exe",123:"soat-miner.exe",400:"dwm.exe",500:"blender.exe",600:"python.exe"}
+        with patch.object(pc,"gpu_processes",return_value=clients):
+            with self.assertRaisesRegex(pc.GuardStop,"other_gpu_workload"):c.guard({"Gpu":normal},220)
+        c.proc=None
+        with tempfile.TemporaryDirectory() as td:
+            c.run=pathlib.Path(td);c.finalize_session("other_gpu_workload")
+            saved=json.loads((c.run/"session-result.json").read_text())
+        evidence=saved["GpuYieldEvidence"]
+        self.assertEqual({p["Pid"] for p in evidence["ForeignProcesses"]},{500,600})
+        self.assertEqual({p["Name"] for p in evidence["ForeignProcesses"]},{"blender.exe","python.exe"})
+        self.assertEqual(evidence["Reason"],saved["StopReason"])
+        self.assertEqual(evidence["Phase"],"selected-profile")
+        self.assertTrue(saved["PowerRestored"]);self.assertFalse(saved["OwnedChildAlive"])
+        c.gpu.power.assert_called_once_with(370)
+    def test_own_and_desktop_clients_do_not_create_yield_evidence(self):
+        c=self.controller();c.proc=Mock(pid=123)
+        normal={"Temperature":70,"Hotspot":85,"MemoryJunction":80,"PowerLimit":220}
+        with patch.object(pc,"gpu_processes",return_value={pc.os.getpid():"python.exe",123:"soat-miner.exe",400:"dwm.exe"}):
+            c.guard({"Gpu":normal},220)
+        self.assertNotIn("GpuYieldEvidence",c.s)
+
     def test_runtime_preconditions_survive_optimized_python(self):
         c=self.controller()
         with self.assertRaises(ValueError):c.mine(280,60,"should-not-start")
