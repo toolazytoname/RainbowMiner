@@ -26,6 +26,12 @@ class BackendTests(unittest.TestCase):
         for key,bad in [('shape','8192x65536'),('tile','=unvalidated'),('sha256','not-a-hash'),('executable','relative/soat-miner.exe')]:
             cfg=json.loads(json.dumps(self.cfg));cfg['source_backend'][key]=bad
             with self.subTest(key=key),self.assertRaises(ValueError):select_compute_backend(cfg,self.root)
+    def test_confirmed_warpwide_tile_is_pinned_and_unconfirmed_early_tile_is_rejected(self):
+        cfg=json.loads(json.dumps(self.cfg));cfg['source_backend']['tile']='=ampere warpwide large s3 fold k64'
+        backend=select_compute_backend(cfg,self.root);backend.verify_binary()
+        self.assertEqual(backend.environment()['SOAT_PEARL_TILE'],cfg['source_backend']['tile'])
+        cfg['source_backend']['tile']='=ampere early large s3 fold k64'
+        with self.assertRaises(ValueError):select_compute_backend(cfg,self.root)
     def test_source_environment_pins_and_disables_instrumentation(self):
         b=select_compute_backend(self.cfg,self.root);env=b.environment()
         self.assertEqual(env['SOAT_PEARL_SHAPE'],'4096x65536');self.assertEqual(env['SOAT_PEARL_TILE'],'=ampere large s3 fold k64');self.assertNotIn('SOAT_PEARL_PROFILE',env)

@@ -49,7 +49,7 @@ def select_compute_backend(cfg,root):
     if kind=='soat':
         item=cfg.get('source_backend',{});exe=Path(item['executable']);digest=item['sha256'].lower()
         if not exe.is_absolute() or exe.name.lower()!='soat-miner.exe':raise ValueError('Expected absolute source backend executable path')
-        if item.get('shape')!='4096x65536' or item.get('tile')!='=ampere large s3 fold k64':raise ValueError('Only the validated source shape/tile is enabled')
+        if item.get('shape')!='4096x65536' or item.get('tile') not in {'=ampere large s3 fold k64','=ampere warpwide large s3 fold k64'}:raise ValueError('Only the validated source shape/tile is enabled')
         unit='T MAC/s';shape=item['shape'];tile=item['tile']
     elif kind=='krig':
         if cfg.get('allow_krig_relay_fee') is not True:raise ValueError('KRig classifies the loopback relay as a third-party pool and charges 3%; select the validated source backend or explicitly configure that fee')
